@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>双因素方差分析 · 知识点详解</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Microsoft YaHei", Arial, sans-serif; background: #f0f3f8; color: #2c3e50; line-height: 1.8; }
+  .navbar { background: linear-gradient(135deg, #2c3e50, #3498db); color: #fff; padding: 14px 32px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; }
+  .navbar .logo { font-size: 16px; font-weight: bold; }
+  .navbar a { color: #fff; text-decoration: none; font-size: 14px; opacity: 0.85; }
+  .navbar a:hover { opacity: 1; }
+  .container { max-width: 860px; margin: 0 auto; padding: 32px 24px; }
+  .page-title { font-size: 24px; margin-bottom: 6px; color: #2c3e50; }
+  .page-sub { font-size: 13px; color: #7f8c8d; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid #ecf0f1; }
+  .section { background: #fff; border-radius: 12px; padding: 22px 26px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+  .section h3 { font-size: 15px; color: #2c3e50; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .section h3::before { content: ''; width: 4px; height: 16px; background: linear-gradient(180deg, #3498db, #27ae60); border-radius: 2px; }
+  .section p { font-size: 14.5px; color: #34495e; margin-bottom: 8px; }
+  .section ul { list-style: none; padding-left: 0; }
+  .section ul li { padding: 4px 0 4px 18px; position: relative; font-size: 14px; }
+  .section ul li::before { content: '·'; position: absolute; left: 6px; color: #3498db; font-weight: bold; }
+  .example { background: #f8fafc; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; border-left: 4px solid #3498db; }
+  .example .q { font-size: 14.5px; font-weight: bold; margin-bottom: 12px; }
+  .example .options { list-style: none; padding: 0; margin-bottom: 12px; }
+  .example .options li { padding: 9px 14px; margin-bottom: 8px; border: 2px solid #ecf0f1; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.15s; display: flex; align-items: center; gap: 10px; }
+  .example .options li:hover { border-color: #3498db; background: #f8fbff; }
+  .example .options li.selected { border-color: #3498db; background: #eaf2f8; }
+  .example .options li.correct { border-color: #27ae60; background: #eafaf1; }
+  .example .options li.wrong { border-color: #e74c3c; background: #fdedec; }
+  .example .options li.disabled { pointer-events: none; opacity: 0.9; }
+  .example .options li .label { width: 24px; height: 24px; border-radius: 50%; background: #ecf0f1; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; flex-shrink: 0; }
+  .example .options li.selected .label { background: #3498db; color: #fff; }
+  .example .options li.correct .label { background: #27ae60; color: #fff; }
+  .example .options li.wrong .label { background: #e74c3c; color: #fff; }
+  .example .btn-row { display: flex; gap: 10px; margin-bottom: 12px; }
+  .example .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; }
+  .example .btn-submit { background: #3498db; color: #fff; }
+  .example .btn-submit:disabled { background: #bdc3c7; cursor: not-allowed; }
+  .example .btn-show { background: #95a5a6; color: #fff; }
+  .example .feedback { display: none; margin-top: 10px; padding: 14px 16px; border-radius: 8px; font-size: 14px; line-height: 1.7; }
+  .example .feedback.show { display: block; }
+  .example .feedback.correct { background: #eafaf1; border-left: 4px solid #27ae60; color: #1e6b3a; }
+  .example .feedback.wrong { background: #fdedec; border-left: 4px solid #e74c3c; color: #922b21; }
+  .example .feedback .verdict { font-weight: bold; margin-bottom: 6px; }
+  .example .feedback .solve { color: #34495e; margin-bottom: 6px; }
+  .example .feedback .ans { font-weight: bold; color: #27ae60; padding-top: 6px; border-top: 1px dashed #d5dbdb; }
+  .back-btn { display: inline-block; margin-top: 20px; padding: 10px 22px; background: #3498db; color: #fff; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="navbar">
+  <div class="logo">《智能统计分析与决策》知识点详解</div>
+  <a href="chapters.html">← 返回章节列表</a>
+</div>
+
+<div class="container">
+
+  <div class="page-title">双因素方差分析</div>
+  <div class="page-sub">第7章 方差分析 · 知识点详解</div>
+
+  <div class="section">
+    <h3>文字解释</h3>
+    <p>双因素方差分析同时考虑两个因素对结果的影响，可分析<strong>主效应</strong>和<strong>交互效应</strong>。</p>
+    <p><strong>交互效应</strong>是指一个因素的效应依赖于另一个因素的水平。例如，某种营销策略在男性用户中效果好，在女性用户中效果差，就存在性别与营销策略的交互效应。</p>
+    <p>双因素方差分析对样本量要求较高，且要求满足正态性、独立性和方差齐性。</p>
+  </div>
+
+  <div class="section">
+    <h3>核心假设</h3>
+    <ul>
+      <li>两因素独立作用或存在交互</li>
+      <li>正态性、独立性和方差齐性</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h3>适用场景</h3>
+    <ul>
+      <li>营销组合双因素实验</li>
+      <li>同时考察两个因素对结果的影响</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h3>例题</h3>
+
+    <div class="example" data-type="choice" data-answer="A">
+      <div class="q">例题1：双因素方差分析可以分析什么？</div>
+      <ul class="options">
+        <li data-value="A"><span class="label">A</span>主效应和交互效应</li>
+        <li data-value="B"><span class="label">B</span>只有主效应</li>
+        <li data-value="C"><span class="label">C</span>只有交互效应</li>
+      </ul>
+      <div class="btn-row">
+        <button class="btn btn-submit" disabled>提交答案</button>
+        <button class="btn btn-show">直接看答案</button>
+      </div>
+      <div class="feedback">
+        <div class="verdict"></div>
+        <div class="solve"><strong>解题过程：</strong>双因素方差分析可分析主效应和交互效应。</div>
+        <div class="ans">正确答案：A（主效应和交互效应）</div>
+      </div>
+    </div>
+
+    <div class="example" data-type="choice" data-answer="A">
+      <div class="q">例题2：交互效应是指什么？</div>
+      <ul class="options">
+        <li data-value="A"><span class="label">A</span>一个因素的效应依赖于另一个因素的水平</li>
+        <li data-value="B"><span class="label">B</span>两个因素独立</li>
+        <li data-value="C"><span class="label">C</span>两个因素完全相同</li>
+      </ul>
+      <div class="btn-row">
+        <button class="btn btn-submit" disabled>提交答案</button>
+        <button class="btn btn-show">直接看答案</button>
+      </div>
+      <div class="feedback">
+        <div class="verdict"></div>
+        <div class="solve"><strong>解题过程：</strong>交互效应是指一个因素的效应依赖于另一个因素的水平。</div>
+        <div class="ans">正确答案：A</div>
+      </div>
+    </div>
+
+    <div class="example" data-type="choice" data-answer="B">
+      <div class="q">例题3：判断：单因素方差分析可以分析交互效应。</div>
+      <ul class="options">
+        <li data-value="A"><span class="label">A</span>正确</li>
+        <li data-value="B"><span class="label">B</span>错误</li>
+      </ul>
+      <div class="btn-row">
+        <button class="btn btn-submit" disabled>提交答案</button>
+        <button class="btn btn-show">直接看答案</button>
+      </div>
+      <div class="feedback">
+        <div class="verdict"></div>
+        <div class="solve"><strong>解题过程：</strong>单因素方差分析只考虑一个因素，不能分析交互效应。</div>
+        <div class="ans">正确答案：B（错误）</div>
+      </div>
+    </div>
+
+  </div>
+
+  <a class="back-btn" href="chapters.html">← 返回章节列表</a>
+
+</div>
+
+<script>
+document.querySelectorAll('.example').forEach(function(ex) {
+  var type = ex.dataset.type;
+  var answer = ex.dataset.answer;
+  var submitBtn = ex.querySelector('.btn-submit');
+  var showBtn = ex.querySelector('.btn-show');
+  var feedback = ex.querySelector('.feedback');
+  var verdict = ex.querySelector('.verdict');
+  var selectedValue = null;
+
+  if (type === 'choice') {
+    var options = ex.querySelectorAll('.options li');
+    options.forEach(function(li) {
+      li.addEventListener('click', function() {
+        if (li.classList.contains('disabled')) return;
+        options.forEach(function(o) { o.classList.remove('selected'); });
+        li.classList.add('selected');
+        selectedValue = li.dataset.value;
+        submitBtn.disabled = false;
+      });
+    });
+  }
+  if (type === 'fill') {
+    var input = ex.querySelector('.input-area');
+    input.addEventListener('input', function() {
+      selectedValue = input.value.trim();
+      submitBtn.disabled = selectedValue === '';
+    });
+  }
+
+  submitBtn.addEventListener('click', function() {
+    if (selectedValue === null || selectedValue === '') return;
+    var isCorrect = (selectedValue === answer);
+    if (type === 'choice') {
+      ex.querySelectorAll('.options li').forEach(function(li) {
+        li.classList.add('disabled');
+        if (li.dataset.value === answer) li.classList.add('correct');
+        else if (li.dataset.value === selectedValue) li.classList.add('wrong');
+      });
+    }
+    if (type === 'fill') {
+      var input = ex.querySelector('.input-area');
+      input.disabled = true;
+      input.style.borderColor = isCorrect ? '#27ae60' : '#e74c3c';
+      input.style.background = isCorrect ? '#eafaf1' : '#fdedec';
+    }
+    feedback.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
+    verdict.textContent = isCorrect ? '✓ 回答正确！' : '✗ 回答错误';
+    submitBtn.disabled = true;
+    submitBtn.textContent = '已提交';
+  });
+
+  showBtn.addEventListener('click', function() {
+    if (type === 'choice') {
+      ex.querySelectorAll('.options li').forEach(function(li) {
+        li.classList.add('disabled');
+        if (li.dataset.value === answer) li.classList.add('correct');
+      });
+    }
+    if (type === 'fill') {
+      var input = ex.querySelector('.input-area');
+      input.disabled = true;
+      input.style.borderColor = '#27ae60';
+      input.style.background = '#eafaf1';
+    }
+    feedback.className = 'feedback show correct';
+    verdict.textContent = '已显示答案';
+    submitBtn.disabled = true;
+    submitBtn.textContent = '已提交';
+    showBtn.disabled = true;
+  });
+});
+</script>
+
+</body>
+</html>

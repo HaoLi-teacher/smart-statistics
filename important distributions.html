@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>卡方、T、F 分布交互演示</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; background: #f0f3f8; color: #2c3e50; }
+  h1 { font-size: 24px; text-align: center; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #7f8c8d; font-size: 14px; margin-bottom: 20px; }
+  .dist-tabs { display: flex; gap: 12px; justify-content: center; margin-bottom: 18px; }
+  .dist-tabs button { padding: 12px 36px; border: 2px solid #3498db; background: #fff; color: #3498db; border-radius: 10px; font-size: 16px; cursor: pointer; transition: all 0.2s; font-weight: bold; }
+  .dist-tabs button.active { background: #3498db; color: #fff; box-shadow: 0 4px 12px rgba(52,152,219,0.3); }
+  .dist-tabs button:hover { background: #3498db; color: #fff; }
+  .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 18px; }
+  @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+  .panel { background: #fff; border-radius: 12px; padding: 18px 22px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 16px; }
+  .panel h3 { font-size: 15px; color: #34495e; margin: 0 0 12px 0; padding-bottom: 8px; border-bottom: 2px solid #ecf0f1; }
+  .control-row { display: flex; align-items: center; margin-bottom: 12px; gap: 10px; }
+  .control-row label { width: 150px; font-size: 14px; color: #34495e; flex-shrink: 0; }
+  .control-row input[type="range"] { flex: 1; accent-color: #3498db; }
+  .control-row .value { width: 55px; text-align: right; font-weight: bold; color: #2980b9; font-size: 15px; }
+  .custom-select { flex: 1; position: relative; }
+  .select-btn { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 14px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #2c3e50; }
+  .select-btn:hover { border-color: #3498db; }
+  .select-btn .arrow { color: #7f8c8d; font-size: 12px; }
+  .select-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 6px 16px rgba(0,0,0,0.14); z-index: 100; overflow: hidden; }
+  .select-option { padding: 10px 12px; font-size: 14px; cursor: pointer; color: #2c3e50; }
+  .select-option:hover { background: #eaf3fb; }
+  .select-option.selected { background: #d6eaf8; font-weight: bold; }
+  .btn-row { text-align: center; margin-top: 12px; }
+  button.action { background: #3498db; color: #fff; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; cursor: pointer; margin: 0 6px; transition: background 0.2s; font-weight: bold; }
+  button.action:hover { background: #2980b9; }
+  button.action.secondary { background: #95a5a6; }
+  button.action.secondary:hover { background: #7f8c8d; }
+  button.action.green { background: #27ae60; }
+  button.action.green:hover { background: #219150; }
+  button.action.orange { background: #e67e22; }
+  button.action.orange:hover { background: #d35400; }
+  canvas { display: block; margin: 0 auto; background: #fff; border-radius: 8px; }
+  .stats-box { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .stats-box .item { background: #f8fafc; border-radius: 8px; padding: 10px; text-align: center; border: 1px solid #ecf0f1; }
+  .stats-box .item .num { font-size: 20px; font-weight: bold; color: #2980b9; }
+  .stats-box .item .lbl { font-size: 12px; color: #7f8c8d; margin-top: 3px; }
+  .relation-item { font-size: 13px; color: #34495e; padding: 8px 10px; margin-bottom: 6px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #3498db; line-height: 1.5; }
+  .relation-item b { color: #2980b9; }
+  .scenario-box { background: #fff9e6; border-left: 4px solid #f39c12; padding: 12px 14px; border-radius: 6px; font-size: 13px; line-height: 1.7; color: #7d6608; margin-bottom: 10px; }
+  .scenario-box b { color: #b9770e; }
+  .quiz-box { background: #eaf7ee; border-left: 4px solid #27ae60; padding: 12px 14px; border-radius: 6px; font-size: 13px; line-height: 1.7; color: #1e6b3a; margin-bottom: 10px; }
+  .quiz-box b { color: #1e6b3a; }
+  textarea { width: 100%; min-height: 60px; border: 1px solid #d5dbdb; border-radius: 6px; padding: 8px; font-size: 13px; font-family: inherit; resize: vertical; margin-top: 6px; }
+  .note { font-size: 12px; color: #95a5a6; text-align: center; margin-top: 12px; line-height: 1.6; }
+  .hidden { display: none !important; }
+  .tail-indicator { display: flex; gap: 10px; margin-top: 10px; font-size: 13px; }
+  .tail-indicator .tag { flex: 1; padding: 8px; border-radius: 6px; text-align: center; background: #f8fafc; border: 1px solid #ecf0f1; }
+  .tail-indicator .tag .v { font-weight: bold; font-size: 16px; }
+  .tail-indicator .tag.left .v { color: #2980b9; }
+  .tail-indicator .tag.right .v { color: #c0392b; }
+  .tail-indicator .tag .l { font-size: 12px; color: #7f8c8d; }
+  .sig-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; flex-wrap: wrap; }
+  .sig-row label { color: #34495e; }
+  .sig-row input { width: 70px; padding: 5px; border: 1px solid #ddd; border-radius: 5px; font-size: 13px; }
+  .sig-row .crit { color: #c0392b; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>卡方、T、F 分布交互演示</h1>
+<div class="subtitle">《智能统计分析与决策》· 核心概念可视化 · 决策任务链嵌入</div>
+
+<div class="dist-tabs">
+  <button id="tabChi" class="active">卡方分布 χ²</button>
+  <button id="tabT">T 分布</button>
+  <button id="tabF">F 分布</button>
+</div>
+
+<div class="main-grid">
+  <div>
+    <div class="panel">
+      <canvas id="distCanvas" width="700" height="360"></canvas>
+      <div class="stats-box">
+        <div class="item"><div class="num" id="statMean">-</div><div class="lbl">理论均值</div></div>
+        <div class="item"><div class="num" id="statVar">-</div><div class="lbl">理论方差</div></div>
+        <div class="item"><div class="num" id="statMode">-</div><div class="lbl">众数</div></div>
+        <div class="item"><div class="num" id="statSkew">-</div><div class="lbl">偏度</div></div>
+        <div class="item"><div class="num" id="statKurt">-</div><div class="lbl">峰度</div></div>
+        <div class="item"><div class="num" id="statMedian">-</div><div class="lbl">中位数</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>概率与分位数交互（拖拽竖线或输入观察值）</h3>
+      <div class="control-row">
+        <label>观察值 x：</label>
+        <input type="range" id="obsSlider" min="0" max="30" value="5" step="0.1">
+        <span class="value" id="obsVal">5.0</span>
+      </div>
+      <div class="tail-indicator">
+        <div class="tag left"><div class="v" id="pLeft">-</div><div class="l">P(X ≤ x) 左侧累积概率</div></div>
+        <div class="tag right"><div class="v" id="pRight">-</div><div class="l">P(X > x) 右侧尾部概率（p 值）</div></div>
+      </div>
+      <div class="sig-row">
+        <label>显著性水平 α：</label>
+        <input type="number" id="alphaInput" value="0.05" step="0.01" min="0.001" max="0.5">
+        <span>临界值：</span><span class="crit" id="critVal">-</span>
+        <span style="color:#7f8c8d;">（右侧拒绝域）</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>抽样模拟验证（从当前分布随机抽样）</h3>
+      <div class="control-row">
+        <label>模拟样本量 N：</label>
+        <input type="range" id="simN" min="100" max="5000" value="1000" step="100">
+        <span class="value" id="simNVal">1000</span>
+      </div>
+      <div class="btn-row" style="margin-top:6px;">
+        <button class="action green" id="simBtn">开始模拟抽样</button>
+        <button class="action secondary" id="simClearBtn">清除模拟</button>
+      </div>
+      <canvas id="simCanvas" width="700" height="180" style="margin-top:12px;"></canvas>
+      <div class="stats-box" style="margin-top:10px;">
+        <div class="item"><div class="num" id="simMean">-</div><div class="lbl">模拟样本均值</div></div>
+        <div class="item"><div class="num" id="simStd">-</div><div class="lbl">模拟样本标准差</div></div>
+        <div class="item"><div class="num" id="simN2">-</div><div class="lbl">模拟样本量</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h3>参数控制</h3>
+      <div class="control-row" id="rowChi">
+        <label>自由度 k：</label>
+        <input type="range" id="sliderChi" min="1" max="30" value="5" step="1">
+        <span class="value" id="valChi">5</span>
+      </div>
+      <div class="control-row hidden" id="rowT">
+        <label>自由度 df：</label>
+        <input type="range" id="sliderT" min="1" max="30" value="5" step="1">
+        <span class="value" id="valT">5</span>
+      </div>
+      <div class="control-row hidden" id="rowF1">
+        <label>分子自由度 d1：</label>
+        <input type="range" id="sliderF1" min="1" max="30" value="5" step="1">
+        <span class="value" id="valF1">5</span>
+      </div>
+      <div class="control-row hidden" id="rowF2">
+        <label>分母自由度 d2：</label>
+        <input type="range" id="sliderF2" min="1" max="30" value="10" step="1">
+        <span class="value" id="valF2">10</span>
+      </div>
+      <div class="control-row">
+        <label>对比叠加：</label>
+        <div class="custom-select">
+          <button type="button" class="select-btn" id="compareBtn" data-value="none"><span id="compareBtnText">不叠加</span><span class="arrow">▾</span></button>
+          <div class="select-list hidden" id="compareList">
+            <div class="select-option selected" data-value="none">不叠加</div>
+            <div class="select-option" data-value="normal">叠加标准正态 N(0,1)</div>
+            <div class="select-option" data-value="self2">叠加另一组参数</div>
+          </div>
+        </div>
+      </div>
+      <div class="control-row hidden" id="compare2Row">
+        <label>对比参数：</label>
+        <input type="range" id="sliderCompare" min="1" max="30" value="20" step="1">
+        <span class="value" id="valCompare">20</span>
+      </div>
+      <div class="btn-row">
+        <button class="action secondary" id="resetBtn">重置全部</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>分布间关系</h3>
+      <div class="relation-item" id="relChi"><b>χ²(k)</b>：k 个独立标准正态变量的平方和。k 增大时趋近正态 N(k, 2k)。</div>
+      <div class="relation-item hidden" id="relT"><b>T(df)</b>：标准正态 / √(χ²(df)/df)。df→∞ 时趋近标准正态。</div>
+      <div class="relation-item hidden" id="relF"><b>F(d1,d2)</b>：两个独立卡方之比除以各自自由度。F(1,d) 的平方根 = |T(d)|。</div>
+      <div class="relation-item" style="border-left-color:#e67e22;"><b>关键关系</b>：T² = F(1, df)；χ²(k) 是 Gamma(k/2, 2) 的特例。</div>
+    </div>
+
+    <div class="panel">
+      <h3>决策情境嵌入</h3>
+      <div class="scenario-box" id="scenChi">
+        <b>卡方检验</b>：某电商平台想检验"用户性别与购买品类是否独立"。列联表 3×4，自由度 k=(3-1)(4-1)=6。计算 χ²=8.5，判断是否拒绝独立性假设。
+        <br><button class="action orange" style="margin-top:8px; padding:6px 14px; font-size:12px;" onclick="applyScenario('chi')">应用此情境</button>
+      </div>
+      <div class="scenario-box hidden" id="scenT">
+        <b>T 检验</b>：某医疗器械企业想检验"新工艺是否显著缩短生产时间"。样本量 n=15，df=14。计算 t=2.1，判断新工艺是否显著优于旧工艺（单侧）。
+        <br><button class="action orange" style="margin-top:8px; padding:6px 14px; font-size:12px;" onclick="applyScenario('t')">应用此情境</button>
+      </div>
+      <div class="scenario-box hidden" id="scenF">
+        <b>F 检验</b>：某金融风控团队想比较两个模型的预测误差方差是否相等。模型A样本量 20，模型B样本量 25，d1=19，d2=24。计算 F=1.8，判断方差是否齐性。
+        <br><button class="action orange" style="margin-top:8px; padding:6px 14px; font-size:12px;" onclick="applyScenario('f')">应用此情境</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>元认知引导（记录你的思考）</h3>
+      <div class="quiz-box">
+        <b>思考题</b>：拖动自由度滑块，观察曲线形状变化。你认为 k=1 和 k=30 的卡方分布，形状差异说明了什么？
+        <textarea id="reflectInput" placeholder="写下你的理解……"></textarea>
+        <button class="action" style="margin-top:8px; padding:6px 16px; font-size:12px;" id="saveReflect">保存我的理解</button>
+        <span id="saveTip" style="font-size:12px; color:#27ae60; margin-left:8px;"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  拖动滑块调整自由度，观察分布曲线形状的变化。拖拽"观察值 x"竖线，查看累积概率与 p 值。<br>
+  点击"开始模拟抽样"，验证随机样本直方图与理论曲线的吻合程度。
+</div>
+
+<script>
+// ============ 全局状态 ============
+var currentDist = 'chi';
+var obsX = 5;
+
+// ============ Gamma 函数（Lanczos 近似） ============
+function gamma(z) {
+  var g = 7;
+  var C = [0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+    771.32342877765313, -176.61502916214059, 12.507343278686905,
+    -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  if (z < 0.5) return Math.PI / (Math.sin(Math.PI * z) * gamma(1 - z));
+  z -= 1;
+  var x = C[0];
+  for (var i = 1; i < g + 2; i++) x += C[i] / (z + i);
+  var t = z + g + 0.5;
+  return Math.sqrt(2 * Math.PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+}
+
+// ============ 概率密度函数 ============
+function chi2pdf(x, k) {
+  if (x <= 0) return 0;
+  var h = k / 2;
+  return Math.pow(x, h - 1) * Math.exp(-x / 2) / (Math.pow(2, h) * gamma(h));
+}
+function tpdf(x, df) {
+  var c = gamma((df + 1) / 2) / (Math.sqrt(df * Math.PI) * gamma(df / 2));
+  return c * Math.pow(1 + x * x / df, -(df + 1) / 2);
+}
+function fpdf(x, d1, d2) {
+  if (x <= 0) return 0;
+  var num = Math.pow(d1 * x, d1) * Math.pow(d2, d2);
+  var den = Math.pow(d1 * x + d2, d1 + d2);
+  var beta = gamma(d1 / 2) * gamma(d2 / 2) / gamma((d1 + d2) / 2);
+  return Math.sqrt(num / den) / (x * beta);
+}
+function normalpdf(x, mu, sigma) {
+  return Math.exp(-((x - mu) * (x - mu)) / (2 * sigma * sigma)) / (sigma * Math.sqrt(2 * Math.PI));
+}
+
+// ============ 参数读取 ============
+function getParams() {
+  return {
+    chi: parseInt(document.getElementById('sliderChi').value),
+    t: parseInt(document.getElementById('sliderT').value),
+    f1: parseInt(document.getElementById('sliderF1').value),
+    f2: parseInt(document.getElementById('sliderF2').value)
+  };
+}
+function getCompare() {
+  return {
+    mode: document.getElementById('compareBtn').dataset.value,
+    val: parseInt(document.getElementById('sliderCompare').value)
+  };
+}
+
+// ============ 横轴范围 ============
+function getXRange() {
+  var p = getParams();
+  var c = getCompare();
+  var xMax = 20;
+  if (currentDist === 'chi') xMax = Math.max(20, p.chi * 3);
+  else if (currentDist === 't') xMax = 6;
+  else {
+    var d2 = p.f2;
+    xMax = Math.max(5, Math.min(25, 4 * d2 / Math.max(d2 - 2, 1)));
+  }
+  if (c.mode === 'self2' && currentDist !== 't') {
+    xMax = Math.max(xMax, c.val * 3);
+  }
+  return currentDist === 't' ? [-xMax, xMax] : [0, xMax];
+}
+
+// ============ PDF 值 ============
+function pdfValue(x, overrideParams) {
+  var p = overrideParams || getParams();
+  if (currentDist === 'chi') return chi2pdf(x, p.chi);
+  if (currentDist === 't') return tpdf(x, p.t);
+  return fpdf(x, p.f1, p.f2);
+}
+
+// ============ 数值积分（累积概率） ============
+function cdf(x, params) {
+  var range = getXRange();
+  var xMin = range[0];
+  var steps = 600;
+  var h = (x - xMin) / steps;
+  if (h <= 0) return 0;
+  var sum = 0;
+  for (var i = 0; i < steps; i++) {
+    var x1 = xMin + i * h;
+    var x2 = xMin + (i + 1) * h;
+    sum += (pdfValue(x1, params) + pdfValue(x2, params)) / 2 * h;
+  }
+  return Math.min(1, Math.max(0, sum));
+}
+
+// ============ 理论统计量 ============
+function getTheoreticalStats() {
+  var p = getParams();
+  if (currentDist === 'chi') {
+    var k = p.chi;
+    return {
+      mean: k, variance: 2 * k, mode: Math.max(0, k - 2),
+      skew: Math.sqrt(8 / k), kurt: 12 / k,
+      median: k * Math.pow(1 - 2 / (9 * k), 3)
+    };
+  } else if (currentDist === 't') {
+    var df = p.t;
+    return {
+      mean: df > 1 ? 0 : NaN,
+      variance: df > 2 ? df / (df - 2) : (df > 1 ? Infinity : NaN),
+      mode: 0, skew: 0,
+      kurt: df > 4 ? 6 / (df - 4) : NaN,
+      median: 0
+    };
+  } else {
+    var d1 = p.f1, d2 = p.f2;
+    var variance = NaN;
+    if (d2 > 4) variance = (2 * d2 * d2 * (d1 + d2 - 2)) / (d1 * (d2 - 2) * (d2 - 2) * (d2 - 4));
+    else if (d2 > 2) variance = Infinity;
+    return {
+      mean: d2 > 2 ? d2 / (d2 - 2) : NaN,
+      variance: variance,
+      mode: d1 > 2 ? ((d1 - 2) / d1) * (d2 / (d2 + 2)) : NaN,
+      skew: d2 > 6 ? (2 * d1 + d2 - 2) * Math.sqrt(8 * (d2 - 4)) / ((d2 - 6) * Math.sqrt(d1 * (d1 + d2 - 2))) : NaN,
+      kurt: NaN, median: NaN
+    };
+  }
+}
+
+// ============ 查找临界值（右侧 α 分位数） ============
+function findCritical(alpha) {
+  var range = getXRange();
+  var xMin = range[0], xMax = range[1];
+  var target = 1 - alpha;
+  var lo = xMin, hi = xMax;
+  for (var iter = 0; iter < 50; iter++) {
+    var mid = (lo + hi) / 2;
+    if (cdf(mid) < target) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+// ============ 绘制主图 ============
+function draw() {
+  var canvas = document.getElementById('distCanvas');
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  var range = getXRange();
+  var xMin = range[0], xMax = range[1];
+  var padL = 60, padR = 30, padT = 30, padB = 50;
+  var plotW = W - padL - padR;
+  var plotH = H - padT - padB;
+
+  var samples = 400;
+  var xs = [], ys = [];
+  var yMax = 0;
+  for (var i = 0; i <= samples; i++) {
+    var x = xMin + (i / samples) * (xMax - xMin);
+    var y = pdfValue(x);
+    xs.push(x); ys.push(y);
+    if (y > yMax) yMax = y;
+  }
+  if (yMax === 0) yMax = 1;
+  yMax *= 1.15;
+
+  ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+
+  ctx.strokeStyle = '#f5f5f5';
+  for (var g = 1; g <= 4; g++) {
+    var gy = padT + (g / 5) * plotH;
+    ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+  }
+
+  var alpha = parseFloat(document.getElementById('alphaInput').value) || 0.05;
+  var crit = findCritical(alpha);
+  if (!isNaN(crit) && crit < xMax && crit > xMin) {
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.beginPath();
+    ctx.moveTo(padL + (crit - xMin) / (xMax - xMin) * plotW, H - padB);
+    for (var j = 0; j <= samples; j++) {
+      if (xs[j] >= crit) {
+        var px = padL + (j / samples) * plotW;
+        var py = H - padB - (ys[j] / yMax) * plotH;
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.lineTo(padL + plotW, H - padB);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  var colorMap = { chi: [52,152,219], t: [231,76,60], f: [46,204,113] };
+  var c = colorMap[currentDist];
+  var grad = ctx.createLinearGradient(0, padT, 0, H - padB);
+  grad.addColorStop(0, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0.45)');
+  grad.addColorStop(1, 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',0.03)');
+  ctx.beginPath();
+  ctx.moveTo(padL, H - padB);
+  for (var m = 0; m <= samples; m++) {
+    var px2 = padL + (m / samples) * plotW;
+    var py2 = H - padB - (ys[m] / yMax) * plotH;
+    ctx.lineTo(px2, py2);
+  }
+  ctx.lineTo(W - padR, H - padB);
+  ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath();
+  for (var n = 0; n <= samples; n++) {
+    var px3 = padL + (n / samples) * plotW;
+    var py3 = H - padB - (ys[n] / yMax) * plotH;
+    if (n === 0) ctx.moveTo(px3, py3); else ctx.lineTo(px3, py3);
+  }
+  ctx.strokeStyle = 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+  ctx.lineWidth = 2.5; ctx.stroke();
+
+  var cmp = getCompare();
+  if (cmp.mode === 'normal' && currentDist !== 't') {
+    ctx.beginPath();
+    for (var q = 0; q <= samples; q++) {
+      var xq = xMin + (q / samples) * (xMax - xMin);
+      var yq = normalpdf(xq, 0, 1);
+      var pxq = padL + (q / samples) * plotW;
+      var pyq = H - padB - (yq / yMax) * plotH;
+      if (q === 0) ctx.moveTo(pxq, pyq); else ctx.lineTo(pxq, pyq);
+    }
+    ctx.strokeStyle = '#8e44ad'; ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+  } else if (cmp.mode === 'self2') {
+    var p2 = getParams();
+    if (currentDist === 'chi') p2.chi = cmp.val;
+    else if (currentDist === 't') p2.t = cmp.val;
+    else p2.f1 = cmp.val;
+    ctx.beginPath();
+    for (var r = 0; r <= samples; r++) {
+      var xr = xMin + (r / samples) * (xMax - xMin);
+      var yr = pdfValue(xr, p2);
+      var pxr = padL + (r / samples) * plotW;
+      var pyr = H - padB - (yr / yMax) * plotH;
+      if (r === 0) ctx.moveTo(pxr, pyr); else ctx.lineTo(pxr, pyr);
+    }
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  var obsPx = padL + (obsX - xMin) / (xMax - xMin) * plotW;
+  if (obsPx >= padL && obsPx <= W - padR) {
+    ctx.beginPath();
+    ctx.moveTo(obsPx, padT); ctx.lineTo(obsPx, H - padB);
+    ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center';
+    ctx.fillText('x=' + obsX.toFixed(1), obsPx, padT - 8);
+  }
+
+  if (!isNaN(crit) && crit < xMax && crit > xMin) {
+    var critPx = padL + (crit - xMin) / (xMax - xMin) * plotW;
+    ctx.beginPath();
+    ctx.moveTo(critPx, padT); ctx.lineTo(critPx, H - padB);
+    ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#c0392b'; ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('临界值', critPx, H - padB + 16);
+  }
+
+  ctx.fillStyle = '#7f8c8d'; ctx.font = '12px Arial'; ctx.textAlign = 'center';
+  var ticks = 6;
+  for (var t = 0; t <= ticks; t++) {
+    var xt = xMin + (t / ticks) * (xMax - xMin);
+    var pxt = padL + (t / ticks) * plotW;
+    ctx.fillText(xt.toFixed(1), pxt, H - padB + 18);
+  }
+  ctx.textAlign = 'right';
+  for (var u = 1; u <= 4; u++) {
+    var yVal = (yMax / 5) * u;
+    var pyu = H - padB - (u / 5) * plotH;
+    ctx.fillText(yVal.toFixed(2), padL - 8, pyu + 4);
+  }
+
+  ctx.fillStyle = '#34495e'; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'left';
+  var pp = getParams();
+  var title = '';
+  if (currentDist === 'chi') title = '卡方分布 χ²(k=' + pp.chi + ')';
+  else if (currentDist === 't') title = 'T 分布 (df=' + pp.t + ')';
+  else title = 'F 分布 (d1=' + pp.f1 + ', d2=' + pp.f2 + ')';
+  ctx.fillText(title, padL, padT - 10);
+
+  updateStatsDisplay();
+  updateProbDisplay();
+}
+
+// ============ 更新统计量显示 ============
+function updateStatsDisplay() {
+  var s = getTheoreticalStats();
+  function fmt(v) {
+    if (isNaN(v)) return '不存在';
+    if (v === Infinity) return '∞';
+    return v.toFixed(2);
+  }
+  document.getElementById('statMean').textContent = fmt(s.mean);
+  document.getElementById('statVar').textContent = fmt(s.variance);
+  document.getElementById('statMode').textContent = fmt(s.mode);
+  document.getElementById('statSkew').textContent = fmt(s.skew);
+  document.getElementById('statKurt').textContent = fmt(s.kurt);
+  document.getElementById('statMedian').textContent = fmt(s.median);
+}
+
+// ============ 更新概率显示 ============
+function updateProbDisplay() {
+  var pLeft = cdf(obsX);
+  var pRight = 1 - pLeft;
+  document.getElementById('pLeft').textContent = pLeft.toFixed(4);
+  document.getElementById('pRight').textContent = pRight.toFixed(4);
+  document.getElementById('obsVal').textContent = obsX.toFixed(1);
+
+  var alpha = parseFloat(document.getElementById('alphaInput').value) || 0.05;
+  var crit = findCritical(alpha);
+  document.getElementById('critVal').textContent = isNaN(crit) ? '-' : crit.toFixed(3);
+
+  var range = getXRange();
+  var slider = document.getElementById('obsSlider');
+  slider.min = range[0];
+  slider.max = range[1];
+  if (obsX < range[0]) obsX = range[0];
+  if (obsX > range[1]) obsX = range[1];
+  slider.value = obsX;
+}
+
+// ============ 模拟抽样 ============
+var simData = null;
+function randn() {
+  var u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function runSimulation() {
+  var N = parseInt(document.getElementById('simN').value);
+  var p = getParams();
+  var samplesArr = [];
+  if (currentDist === 'chi') {
+    for (var i = 0; i < N; i++) {
+      var s = 0;
+      for (var j = 0; j < p.chi; j++) { var z = randn(); s += z * z; }
+      samplesArr.push(s);
+    }
+  } else if (currentDist === 't') {
+    for (var i2 = 0; i2 < N; i2++) {
+      var z2 = randn();
+      var s2 = 0;
+      for (var j2 = 0; j2 < p.t; j2++) { var z3 = randn(); s2 += z3 * z3; }
+      samplesArr.push(z2 / Math.sqrt(s2 / p.t));
+    }
+  } else {
+    for (var i3 = 0; i3 < N; i3++) {
+      var s1 = 0, s2b = 0;
+      for (var j3 = 0; j3 < p.f1; j3++) { var z4 = randn(); s1 += z4 * z4; }
+      for (var j4 = 0; j4 < p.f2; j4++) { var z5 = randn(); s2b += z5 * z5; }
+      samplesArr.push((s1 / p.f1) / (s2b / p.f2));
+    }
+  }
+  simData = samplesArr;
+  drawSimHistogram();
+  var mean = samplesArr.reduce(function(a, b) { return a + b; }, 0) / N;
+  var std = Math.sqrt(samplesArr.reduce(function(a, b) { return a + (b - mean) * (b - mean); }, 0) / N);
+  document.getElementById('simMean').textContent = mean.toFixed(3);
+  document.getElementById('simStd').textContent = std.toFixed(3);
+  document.getElementById('simN2').textContent = N;
+}
+
+function drawSimHistogram() {
+  var canvas = document.getElementById('simCanvas');
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (!simData || simData.length === 0) return;
+
+  var range = getXRange();
+  var xMin = range[0], xMax = range[1];
+  var padL = 60, padR = 30, padT = 20, padB = 40;
+  var plotW = W - padL - padR, plotH = H - padT - padB;
+
+  var bins = 40;
+  var binW = (xMax - xMin) / bins;
+  var counts = new Array(bins).fill(0);
+  var maxCount = 0;
+  for (var i = 0; i < simData.length; i++) {
+    var idx = Math.floor((simData[i] - xMin) / binW);
+    if (idx >= 0 && idx < bins) {
+      counts[idx]++;
+      if (counts[idx] > maxCount) maxCount = counts[idx];
+    }
+  }
+  if (maxCount === 0) maxCount = 1;
+
+  ctx.fillStyle = 'rgba(52, 152, 219, 0.6)';
+  for (var b = 0; b < bins; b++) {
+    var bx = padL + b * (plotW / bins);
+    var bh = (counts[b] / maxCount) * plotH;
+    ctx.fillRect(bx, H - padB - bh, plotW / bins - 1, bh);
+  }
+
+  var samples = 300;
+  var ys = [];
+  for (var s = 0; s <= samples; s++) {
+    var x = xMin + (s / samples) * (xMax - xMin);
+    ys.push(pdfValue(x));
+  }
+  ctx.beginPath();
+  for (var s2 = 0; s2 <= samples; s2++) {
+    var px = padL + (s2 / samples) * plotW;
+    var expCount = ys[s2] * simData.length * binW;
+    var py = H - padB - (expCount / maxCount) * plotH;
+    if (s2 === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.stroke();
+
+  ctx.strokeStyle = '#ddd';
+  ctx.beginPath(); ctx.moveTo(padL, padT); ctx.lineTo(padL, H - padB); ctx.lineTo(W - padR, H - padB); ctx.stroke();
+  ctx.fillStyle = '#7f8c8d'; ctx.font = '12px Arial'; ctx.textAlign = 'center';
+  for (var t = 0; t <= 6; t++) {
+    var xt = xMin + (t / 6) * (xMax - xMin);
+    ctx.fillText(xt.toFixed(1), padL + (t / 6) * plotW, H - padB + 18);
+  }
+  ctx.fillStyle = '#34495e'; ctx.font = 'bold 13px Arial'; ctx.textAlign = 'left';
+  ctx.fillText('模拟样本直方图 vs 理论曲线（红线）', padL, padT - 6);
+}
+
+// ============ 决策情境 ============
+function applyScenario(type) {
+  if (type === 'chi') {
+    currentDist = 'chi';
+    document.getElementById('sliderChi').value = 6;
+    obsX = 8.5;
+  } else if (type === 't') {
+    currentDist = 't';
+    document.getElementById('sliderT').value = 14;
+    obsX = 2.1;
+  } else {
+    currentDist = 'f';
+    document.getElementById('sliderF1').value = 19;
+    document.getElementById('sliderF2').value = 24;
+    obsX = 1.8;
+  }
+  document.getElementById('alphaInput').value = 0.05;
+  switchTab(currentDist);
+  draw();
+}
+
+// ============ 切换分布标签 ============
+function switchTab(dist) {
+  currentDist = dist;
+  document.getElementById('tabChi').classList.toggle('active', dist === 'chi');
+  document.getElementById('tabT').classList.toggle('active', dist === 't');
+  document.getElementById('tabF').classList.toggle('active', dist === 'f');
+  document.getElementById('rowChi').classList.toggle('hidden', dist !== 'chi');
+  document.getElementById('rowT').classList.toggle('hidden', dist !== 't');
+  document.getElementById('rowF1').classList.toggle('hidden', dist !== 'f');
+  document.getElementById('rowF2').classList.toggle('hidden', dist !== 'f');
+  document.getElementById('relChi').classList.toggle('hidden', dist !== 'chi');
+  document.getElementById('relT').classList.toggle('hidden', dist !== 't');
+  document.getElementById('relF').classList.toggle('hidden', dist !== 'f');
+  document.getElementById('scenChi').classList.toggle('hidden', dist !== 'chi');
+  document.getElementById('scenT').classList.toggle('hidden', dist !== 't');
+  document.getElementById('scenF').classList.toggle('hidden', dist !== 'f');
+  var range = getXRange();
+  var slider = document.getElementById('obsSlider');
+  slider.min = range[0];
+  slider.max = range[1];
+  if (obsX < range[0] || obsX > range[1]) obsX = (range[0] + range[1]) / 2;
+  slider.value = obsX;
+}
+
+// ============ 事件绑定 ============
+document.getElementById('tabChi').addEventListener('click', function() { switchTab('chi'); draw(); });
+document.getElementById('tabT').addEventListener('click', function() { switchTab('t'); draw(); });
+document.getElementById('tabF').addEventListener('click', function() { switchTab('f'); draw(); });
+document.getElementById('sliderChi').addEventListener('input', function() {
+  document.getElementById('valChi').textContent = this.value; draw();
+});
+document.getElementById('sliderT').addEventListener('input', function() {
+  document.getElementById('valT').textContent = this.value; draw();
+});
+document.getElementById('sliderF1').addEventListener('input', function() {
+  document.getElementById('valF1').textContent = this.value; draw();
+});
+document.getElementById('sliderF2').addEventListener('input', function() {
+  document.getElementById('valF2').textContent = this.value; draw();
+});
+document.getElementById('obsSlider').addEventListener('input', function() {
+  obsX = parseFloat(this.value); draw();
+});
+document.getElementById('alphaInput').addEventListener('input', function() { draw(); });
+document.getElementById('simN').addEventListener('input', function() {
+  document.getElementById('simNVal').textContent = this.value;
+});
+document.getElementById('simBtn').addEventListener('click', runSimulation);
+document.getElementById('simClearBtn').addEventListener('click', function() {
+  simData = null;
+  var canvas = document.getElementById('simCanvas');
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('simMean').textContent = '-';
+  document.getElementById('simStd').textContent = '-';
+  document.getElementById('simN2').textContent = '-';
+});
+
+// 自定义下拉：对比叠加
+var compareBtn = document.getElementById('compareBtn');
+var compareList = document.getElementById('compareList');
+compareBtn.addEventListener('click', function(e) {
+  e.stopPropagation();
+  compareList.classList.toggle('hidden');
+});
+var compareOptions = compareList.querySelectorAll('.select-option');
+for (var co = 0; co < compareOptions.length; co++) {
+  compareOptions[co].addEventListener('click', function(e) {
+    e.stopPropagation();
+    var val = this.dataset.value;
+    compareBtn.dataset.value = val;
+    document.getElementById('compareBtnText').textContent = this.textContent;
+    for (var k = 0; k < compareOptions.length; k++) compareOptions[k].classList.toggle('selected', compareOptions[k] === this);
+    compareList.classList.add('hidden');
+    document.getElementById('compare2Row').classList.toggle('hidden', val !== 'self2');
+    draw();
+  });
+}
+document.addEventListener('click', function() { compareList.classList.add('hidden'); });
+
+document.getElementById('sliderCompare').addEventListener('input', function() {
+  document.getElementById('valCompare').textContent = this.value; draw();
+});
+document.getElementById('resetBtn').addEventListener('click', function() {
+  document.getElementById('sliderChi').value = 5;
+  document.getElementById('valChi').textContent = '5';
+  document.getElementById('sliderT').value = 5;
+  document.getElementById('valT').textContent = '5';
+  document.getElementById('sliderF1').value = 5;
+  document.getElementById('valF1').textContent = '5';
+  document.getElementById('sliderF2').value = 10;
+  document.getElementById('valF2').textContent = '10';
+  obsX = 5;
+  document.getElementById('alphaInput').value = 0.05;
+  compareBtn.dataset.value = 'none';
+  document.getElementById('compareBtnText').textContent = '不叠加';
+  for (var k2 = 0; k2 < compareOptions.length; k2++) compareOptions[k2].classList.toggle('selected', compareOptions[k2].dataset.value === 'none');
+  document.getElementById('compare2Row').classList.add('hidden');
+  simData = null;
+  var canvas = document.getElementById('simCanvas');
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('simMean').textContent = '-';
+  document.getElementById('simStd').textContent = '-';
+  document.getElementById('simN2').textContent = '-';
+  switchTab('chi');
+  draw();
+});
+document.getElementById('saveReflect').addEventListener('click', function() {
+  var txt = document.getElementById('reflectInput').value.trim();
+  if (txt) {
+    document.getElementById('saveTip').textContent = '已保存 ✓';
+    setTimeout(function() { document.getElementById('saveTip').textContent = ''; }, 2000);
+  }
+});
+
+// ============ 初始绘制 ============
+switchTab('chi');
+draw();
+</script>
+</body>
+</html>

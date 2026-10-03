@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>智能统计分析与决策 · 知识图谱</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft YaHei", Arial, sans-serif;
+    background: #f0f3f8; color: #2c3e50;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    background: linear-gradient(135deg, #3498db, #27ae60);
+    color: #fff; padding: 14px 24px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px;
+  }
+  header h1 { font-size: 18px; }
+  header .stats { font-size: 13px; opacity: 0.9; }
+  .toolbar {
+    background: #fff; padding: 10px 24px;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    border-bottom: 1px solid #ecf0f1;
+  }
+  .toolbar label { font-size: 13px; color: #34495e; }
+  .toolbar select, .toolbar input {
+    padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; font-family: inherit;
+  }
+  .toolbar input { flex: 1; min-width: 160px; }
+  .toolbar button {
+    padding: 6px 16px; border: none; border-radius: 6px;
+    background: #3498db; color: #fff; font-size: 13px;
+    cursor: pointer; font-weight: bold;
+  }
+  .toolbar button:hover { background: #2980b9; }
+  .toolbar button.gray { background: #95a5a6; }
+  .toolbar button.gray:hover { background: #7f8c8d; }
+
+  .main { flex: 1; display: flex; position: relative; overflow: hidden; }
+  #graph { flex: 1; }
+
+  .side-panel {
+    width: 340px; background: #fff; border-left: 1px solid #ecf0f1;
+    padding: 20px; overflow-y: auto; display: none;
+  }
+  .side-panel.show { display: block; }
+  .side-panel h3 {
+    font-size: 15px; color: #2c3e50; margin-bottom: 12px;
+    padding-bottom: 8px; border-bottom: 2px solid #ecf0f1;
+  }
+  .side-panel .node-type {
+    display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-size: 12px; margin-bottom: 10px;
+  }
+  .side-panel .field { margin-bottom: 12px; }
+  .side-panel .field .label {
+    font-size: 12px; color: #7f8c8d; margin-bottom: 4px;
+  }
+  .side-panel .field .value {
+    font-size: 13px; line-height: 1.6; color: #2c3e50;
+  }
+  .side-panel .close-btn {
+    float: right; background: none; border: none;
+    font-size: 18px; color: #95a5a6; cursor: pointer;
+  }
+
+  .legend {
+    position: absolute; bottom: 20px; left: 20px;
+    background: rgba(255,255,255,0.95); border-radius: 10px;
+    padding: 12px 16px; font-size: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  }
+  .legend .item {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  }
+  .legend .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>《智能统计分析与决策》知识图谱</h1>
+  <div class="stats" id="stats">加载中……</div>
+</header>
+
+<div class="toolbar">
+  <label>节点类型：</label>
+  <select id="typeFilter">
+    <option value="all">全部</option>
+    <option value="业务问题">业务问题</option>
+    <option value="知识点">知识点</option>
+    <option value="模型方法">模型方法</option>
+    <option value="智能算法">智能算法</option>
+    <option value="决策">决策</option>
+    <option value="审视">审视</option>
+  </select>
+  <label>搜索：</label>
+  <input type="text" id="searchInput" placeholder="输入节点名称，如：中心极限定理">
+  <button id="searchBtn">搜索定位</button>
+  <button class="gray" id="resetBtn">重置视图</button>
+</div>
+
+<div class="main">
+  <div id="graph"></div>
+  <div class="side-panel" id="sidePanel">
+    <button class="close-btn" id="closePanel">×</button>
+    <h3>节点详情</h3>
+    <div id="panelContent"></div>
+  </div>
+  <div class="legend">
+    <div class="item"><div class="dot" style="background:#e74c3c;"></div>业务问题</div>
+    <div class="item"><div class="dot" style="background:#3498db;"></div>知识点</div>
+    <div class="item"><div class="dot" style="background:#27ae60;"></div>模型方法</div>
+    <div class="item"><div class="dot" style="background:#9b59b6;"></div>智能算法</div>
+    <div class="item"><div class="dot" style="background:#f39c12;"></div>决策</div>
+    <div class="item"><div class="dot" style="background:#95a5a6;"></div>审视</div>
+  </div>
+</div>
+
+<script>
+// ==================== 节点数据（内嵌，来自 nodes.csv） ====================
+var NODES = [
+  {id:"P01", type:"业务问题", name:"总体均值估计问题", assumption:"样本随机独立抽取；总体近似正态或大样本", adv:"优势：快速量化总体水平；劣势：抽样偏差会直接失效", scenario:"客户平均消费、员工平均工时、库存平均周转"},
+  {id:"P02", type:"业务问题", name:"总体比例估计问题", assumption:"伯努利试验且样本独立；np、n(1-p)均≥5", adv:"优势：分类事件概率估算；劣势：小样本误差大", scenario:"客户转化率、产品不良率、员工满意度占比"},
+  {id:"P03", type:"业务问题", name:"两总体均值差异比较", assumption:"两组样本独立；方差齐性或大样本", adv:"优势：对比两组群体差异；劣势：非正态小样本结果失真", scenario:"新旧营销方案收入对比、两个工厂产能对比"},
+  {id:"P04", type:"业务问题", name:"两总体比例差异比较", assumption:"两组独立二分类样本", adv:"优势：对比事件发生概率差异；劣势：样本量不足检验力低", scenario:"两个渠道获客率对比、两种工艺次品率对比"},
+  {id:"P05", type:"业务问题", name:"多组均值差异比较", assumption:"各组独立、正态、方差齐性", adv:"优势：一次性多组对比并控制一类错误；劣势：方差不齐时结果不可靠", scenario:"多个区域销售业绩对比、多版本产品用户评分对比"},
+  {id:"P06", type:"业务问题", name:"相关性识别问题", assumption:"变量间存在线性关联趋势；无极端异常值", adv:"优势：快速判断变量共变关系；劣势：相关不等于因果", scenario:"广告投入与销售额、员工培训时长与绩效"},
+  {id:"P07", type:"业务问题", name:"变量预测问题", assumption:"自变量与因变量存在稳定函数关系", adv:"优势：量化预测未来指标；劣势：模型外推风险高", scenario:"预测下季度销量、预测客户流失概率"},
+  {id:"P08", type:"业务问题", name:"分类判别问题", assumption:"不同类别存在可区分的指标特征", adv:"优势：对样本归类；劣势：特征重叠时误判率上升", scenario:"客户分群、信用风险分类、产品质量合格判定"},
+  {id:"P09", type:"业务问题", name:"时间序列趋势识别", assumption:"序列的趋势/季节/噪声可分解；历史规律短期延续", adv:"优势：挖掘时序变化规律；劣势：突发冲击破坏原有规律", scenario:"月度营收、订单量、原材料价格时序分析"},
+  {id:"P10", type:"业务问题", name:"抽样方案设计问题", assumption:"总体单元可识别；抽样框架完整", adv:"优势：可控成本获取样本；劣势：抽样框缺失带来系统性偏差", scenario:"大规模市场调研、企业员工普查抽样"},
+  {id:"P11", type:"业务问题", name:"样本量确定问题", assumption:"预先给定置信水平与边际误差", adv:"优势：平衡成本与精度；劣势：总体方差未知时预估不准", scenario:"市场调研问卷发放数量、质量检测样本规划"},
+  {id:"P12", type:"业务问题", name:"假设检验显著性判断", assumption:"原假设成立，抽样随机误差是唯一偏差来源", adv:"优势：量化证据是否推翻原有猜想；劣势：P值易被操纵且受样本量影响", scenario:"检验产品改良后性能是否提升、政策实施效果检验"},
+  {id:"P13", type:"业务问题", name:"方差解释度评估", assumption:"模型残差独立同分布", adv:"优势：评估自变量对因变量的解释能力；劣势：增加变量使R²虚高", scenario:"评估营销因素能解释多少销售额波动"},
+  {id:"P14", type:"业务问题", name:"多重共线性诊断", assumption:"自变量之间无强线性相关", adv:"优势：识别自变量冗余；劣势：只能识别线性共线", scenario:"多元回归前的变量筛选"},
+  {id:"P15", type:"业务问题", name:"异常值识别问题", assumption:"大部分样本服从同一分布，异常点为小概率事件", adv:"优势：定位离群观测；劣势：可能掩盖真实极端业务事件", scenario:"识别异常订单、识别财务异常数据"},
+  {id:"P16", type:"业务问题", name:"数据分布拟合问题", assumption:"数据来自某理论分布；样本独立", adv:"优势：找到数据概率分布；劣势：小样本难区分不同分布", scenario:"客户订单金额分布、索赔金额分布拟合"},
+  {id:"P17", type:"业务问题", name:"非参数比较问题", assumption:"分布连续，样本独立", adv:"优势：不要求正态假设；劣势：检验统计效能低于参数检验", scenario:"小样本、分布未知的管理实验对比"},
+  {id:"P18", type:"业务问题", name:"指标信效度检验问题", assumption:"观测指标真实反映潜变量，随机误差独立", adv:"优势：验证问卷/量表可靠性；劣势：只能检验测量不能证明理论因果", scenario:"员工满意度问卷、品牌感知量表开发"},
+  {id:"P19", type:"业务问题", name:"聚类分群问题", assumption:"群内相似、群间差异大", adv:"优势：无标签自动分组；劣势：聚类数量选择主观性强", scenario:"客户分群、供应商分类、产品品类划分"},
+  {id:"P20", type:"业务问题", name:"降维简化变量问题", assumption:"原始变量信息可被少数主成分承载", adv:"优势：减少变量冗余；劣势：主成分失去业务可解释性", scenario:"几十项用户行为指标压缩为少数综合指标"},
+  {id:"P21", type:"业务问题", name:"统计过程控制问题", assumption:"生产/业务过程稳定，波动为随机噪声", adv:"优势：实时监控过程异常；劣势：无法识别微小持续偏移", scenario:"生产线质量管控、客服响应时长监控"},
+  {id:"P22", type:"业务问题", name:"卡方独立性检验问题", assumption:"观测频数充足，样本独立", adv:"优势：检验分类变量是否独立；劣势：单元格频数过少时失效", scenario:"客户性别和购买偏好是否相关"},
+  {id:"P23", type:"业务问题", name:"拟合优度检验问题", assumption:"理论分布模型正确", adv:"优势：判断实际数据是否符合理论分布；劣势：样本过小检验力不足", scenario:"检验月度投诉数量是否服从泊松分布"},
+  {id:"P24", type:"业务问题", name:"因果推断问题", assumption:"满足可忽略性、稳定单位处理效应", adv:"优势：分离干预真实效果；劣势：未观测混淆变量带来偏差", scenario:"评估培训项目是否提升员工绩效"},
+  {id:"P25", type:"业务问题", name:"缺失数据处理问题", assumption:"缺失机制可识别(MCAR/MAR/MNAR)", adv:"优势：减少数据浪费；劣势：错误假设缺失机制引入系统偏差", scenario:"调研问卷缺失值、业务系统缺失数据"},
+  {id:"P26", type:"业务问题", name:"数据标准化问题", assumption:"变量量纲差异不代表真实波动差异", adv:"优势：消除量纲影响；劣势：异常值扭曲标准化结果", scenario:"不同单位指标综合建模"},
+  {id:"P27", type:"业务问题", name:"蒙特卡洛模拟问题", assumption:"输入变量分布已知且相互独立", adv:"优势：对不确定性系统仿真；劣势：依赖输入分布假设准确性", scenario:"项目工期风险、投资收益风险模拟"},
+  {id:"P28", type:"业务问题", name:"排队系统优化问题", assumption:"顾客到达与服务时间服从特定分布", adv:"优势：测算等待时长与服务台利用率；劣势：到达模式突变模型失效", scenario:"门店收银排队、客服呼叫中心容量规划"},
+  {id:"P29", type:"业务问题", name:"可靠性分析问题", assumption:"部件失效独立，失效分布稳定", adv:"优势：评估系统可靠度；劣势：无法预测突发人为故障", scenario:"设备运维、供应链系统可靠性评估"},
+  {id:"P30", type:"业务问题", name:"效用与风险决策问题", assumption:"决策者偏好满足效用公理", adv:"优势：量化不同方案期望效用；劣势：偏好随场景变化", scenario:"项目投资方案风险偏好决策"},
+  {id:"P31", type:"业务问题", name:"抽样误差控制问题", assumption:"误差仅来自随机抽样，无回答偏差可控", adv:"优势：量化抽样不确定性；劣势：非抽样误差无法通过样本量消除", scenario:"市场调研置信区间设计"},
+  {id:"P32", type:"业务问题", name:"统计结果外推边界问题", assumption:"未来环境与样本采集环境保持一致", adv:"优势：提醒模型适用边界；劣势：环境变化难以量化", scenario:"预测模型应用范围评估"},
+
+  {id:"K01", type:"知识点", name:"均值", assumption:"数值有意义且可加", adv:"优势：利用全部样本信息；劣势：易受异常值影响", scenario:"对称定量数据集中趋势描述"},
+  {id:"K02", type:"知识点", name:"中位数", assumption:"排序有意义，位置代表中心", adv:"优势：抗异常值稳健；劣势：未充分利用数据信息", scenario:"偏态数据、含离群值的集中趋势"},
+  {id:"K03", type:"知识点", name:"众数", assumption:"存在出现频率最高的取值", adv:"优势：定性数据适用；劣势：可能不存在或不唯一", scenario:"分类/定序数据的代表值"},
+  {id:"K04", type:"知识点", name:"极差", assumption:"数据范围有业务含义", adv:"优势：计算最简单；劣势：只利用两个端点，极不稳健", scenario:"数据粗略离散度速览"},
+  {id:"K05", type:"知识点", name:"方差", assumption:"均值是分布的合理中心", adv:"优势：刻画整体离散程度；劣势：量纲为原量纲平方", scenario:"衡量波动性、离散性"},
+  {id:"K06", type:"知识点", name:"标准差", assumption:"方差量纲还原后有业务含义", adv:"优势：与原数据同量纲，可比；劣势：受异常值影响", scenario:"风险度量、波动评估"},
+  {id:"K07", type:"知识点", name:"四分位数", assumption:"有序数据可分位", adv:"优势：稳健描述位置与离散；劣势：忽略部分分布细节", scenario:"箱线图、稳健区间"},
+  {id:"K08", type:"知识点", name:"偏度", assumption:"分布不对称可用方向量化", adv:"优势：判断分布对称性；劣势：样本偏度受异常值影响", scenario:"判断收益/指标分布的偏斜方向"},
+  {id:"K09", type:"知识点", name:"峰度", assumption:"尾部厚度可量化", adv:"优势：识别厚尾风险；劣势：大样本才稳定", scenario:"金融收益尾部风险识别"},
+  {id:"K10", type:"知识点", name:"箱线图", assumption:"数据可排序且离群值稀疏", adv:"优势：直观呈现分布与异常值；劣势：压缩了分布形态细节", scenario:"多组分布对比、异常值初筛"},
+  {id:"K11", type:"知识点", name:"直方图", assumption:"样本足够多，区间划分合理", adv:"优势：直观呈现分布形状；劣势：区间宽度选择影响结果", scenario:"单变量分布可视化"},
+  {id:"K12", type:"知识点", name:"散点图", assumption:"两变量线性关系可目视", adv:"优势：直观判断相关与异常；劣势：大样本点重叠严重", scenario:"相关关系初步探查"},
+  {id:"K13", type:"知识点", name:"交叉列联表", assumption:"分类变量单元格频数可计数", adv:"优势：呈现分类变量联合分布；劣势：格子过多则稀疏", scenario:"两个分类变量的关联呈现"},
+  {id:"K14", type:"知识点", name:"变异系数", assumption:"均值非零，可跨量纲比较", adv:"优势：无量纲比较离散；劣势：均值为零时无意义", scenario:"不同量纲指标的波动比较"},
+  {id:"K15", type:"知识点", name:"随机事件", assumption:"试验结果不确定但可枚举", adv:"优势：为概率计算提供对象；劣势：概念抽象", scenario:"概率问题建模"},
+  {id:"K16", type:"知识点", name:"概率公理", assumption:"样本空间完备，概率非负归一", adv:"优势：理论自洽；劣势：主观概率公理依赖赋值", scenario:"概率论理论基础"},
+  {id:"K17", type:"知识点", name:"条件概率", assumption:"先验信息可更新", adv:"优势：量化已知条件下的概率；劣势：依赖事件划分正确", scenario:"贝叶斯更新、分层推断"},
+  {id:"K18", type:"知识点", name:"贝叶斯公式", assumption:"先验可设，似然可求", adv:"优势：融合先验与数据更新信念；劣势：先验设定主观", scenario:"贝叶斯估计、垃圾邮件过滤"},
+  {id:"K19", type:"知识点", name:"独立事件", assumption:"一个事件不改变另一事件概率", adv:"优势：简化联合概率计算；劣势：误判独立性会出错", scenario:"概率计算、抽样独立性判定"},
+  {id:"K20", type:"知识点", name:"期望", assumption:"平均意义存在", adv:"优势：度量长期平均结果；劣势：对极端值不敏感", scenario:"决策期望收益计算"},
+  {id:"K21", type:"知识点", name:"方差(概率论)", assumption:"分布中心已知", adv:"优势：度量随机变量离散；劣势：厚尾分布低估风险", scenario:"风险度量"},
+  {id:"K22", type:"知识点", name:"协方差", assumption:"线性相关方向可度量", adv:"优势：刻画两变量线性共变；劣势：受量纲影响不可比", scenario:"相关分析基础"},
+  {id:"K23", type:"知识点", name:"相关系数", assumption:"线性相关强度可归一化度量", adv:"优势：无量纲可比；劣势：仅刻画线性相关", scenario:"相关关系强度判断"},
+  {id:"K24", type:"知识点", name:"二项分布", assumption:"n次独立伯努利试验", adv:"优势：计数成功次数；劣势：要求固定n与独立", scenario:"不良品计数、转化率建模"},
+  {id:"K25", type:"知识点", name:"泊松分布", assumption:"事件独立且单位时间发生率恒定", adv:"优势：建模稀有事件计数；劣势：发生率变化时失效", scenario:"客服来电数、投诉次数建模"},
+  {id:"K26", type:"知识点", name:"正态分布", assumption:"大量微小独立因素叠加", adv:"优势：中心极限定理支撑，计算成熟；劣势：低估极端尾部风险", scenario:"误差分布、大样本推断"},
+  {id:"K27", type:"知识点", name:"t分布", assumption:"总体正态、方差未知、小样本", adv:"优势：适配小样本推断；劣势：非正态时收敛变慢", scenario:"小样本均值推断"},
+  {id:"K28", type:"知识点", name:"卡方分布", assumption:"独立标准正态平方和", adv:"优势：适配方差与拟合检验；劣势：仅适用平方和结构", scenario:"方差检验、拟合优度检验"},
+  {id:"K29", type:"知识点", name:"F分布", assumption:"两个独立卡方之比", adv:"优势：适配方差比检验；劣势：要求正态与独立", scenario:"方差齐性检验、ANOVA"},
+  {id:"K30", type:"知识点", name:"中心极限定理", assumption:"独立同分布且样本量足够大", adv:"优势：大样本均值趋近正态；劣势：严重偏态需极大样本", scenario:"大样本参数估计与检验"},
+  {id:"K31", type:"知识点", name:"样本均值分布", assumption:"样本独立且总体方差有限", adv:"优势：可求均值标准误；劣势：小样本非正态时失真", scenario:"均值推断的基础分布"},
+  {id:"K32", type:"知识点", name:"样本比例分布", assumption:"大样本np、n(1-p)均≥5", adv:"优势：比例推断可近似正态；劣势：小样本近似失效", scenario:"比例估计与检验"},
+  {id:"K33", type:"知识点", name:"抽样误差", assumption:"样本与总体存在随机偏差", adv:"优势：可量化不确定性；劣势：非抽样误差不在此列", scenario:"置信区间、标准误计算"},
+  {id:"K34", type:"知识点", name:"自由度", assumption:"独立信息数量可计算", adv:"优势：校正参数估计偏差；劣势：概念抽象易误用", scenario:"t/F/卡方检验查表依据"},
+  {id:"K35", type:"知识点", name:"次序统计量", assumption:"样本可排序", adv:"优势：稳健估计量基础；劣势：丢失数值细节", scenario:"中位数、分位数估计"},
+  {id:"K36", type:"知识点", name:"Bootstrap自助法", assumption:"样本可放回重复抽样", adv:"优势：不依赖分布假设估计标准误；劣势：样本小时自助结果不稳定", scenario:"复杂统计量不确定性估计"},
+  {id:"K37", type:"知识点", name:"点估计", assumption:"总体参数可由样本量近似", adv:"优势：给出单一估计值；劣势：不含不确定性信息", scenario:"参数快速估算"},
+  {id:"K38", type:"知识点", name:"区间估计", assumption:"抽样分布已知", adv:"优势：量化估计不确定性；劣势：区间宽度随样本减少而增大", scenario:"总体参数置信区间"},
+  {id:"K39", type:"知识点", name:"置信水平", assumption:"样本可重复抽取", adv:"优势：约定估计可信度；劣势：易被误解为参数落区间概率", scenario:"区间估计设定"},
+  {id:"K40", type:"知识点", name:"边际误差", assumption:"样本量与方差可预算", adv:"优势：确定区间宽度；劣势：方差未知时难估算", scenario:"样本量确定、区间宽度"},
+  {id:"K41", type:"知识点", name:"无偏性", assumption:"估计量期望等于总体参数", adv:"优势：长期平均无系统偏差；劣势：单次估计可能偏离", scenario:"估计量优劣评价"},
+  {id:"K42", type:"知识点", name:"有效性", assumption:"方差最小准则", adv:"优势：同等无偏下误差最小；劣势：与大样本性质需权衡", scenario:"估计量选择"},
+  {id:"K43", type:"知识点", name:"一致性", assumption:"样本量增大估计收敛", adv:"优势：大样本渐进可靠；劣势：小样本不保证", scenario:"大样本估计性质"},
+  {id:"K44", type:"知识点", name:"充分性", assumption:"统计量携带全部参数信息", adv:"优势：信息无损压缩；劣势：理论性强、难验证", scenario:"指数族参数估计"},
+  {id:"K45", type:"知识点", name:"原假设H0", assumption:"无效应或无差异为默认状态", adv:"优势：构建检验框架；劣势：显著不等于实践重要", scenario:"假设检验出发点"},
+  {id:"K46", type:"知识点", name:"备择假设H1", assumption:"存在效应或差异", adv:"优势：明确检验方向；劣势：方向设定错误影响功效", scenario:"单双尾检验选择"},
+  {id:"K47", type:"知识点", name:"一类错误α", assumption:"零假设为真时误拒", adv:"优势：控制显著性水平；劣势：过小降低检验力", scenario:"显著性水平设定"},
+  {id:"K48", type:"知识点", name:"二类错误β", assumption:"备择为真时误纳", adv:"优势：量化漏检风险；劣势：难精确计算", scenario:"检验功效评估"},
+  {id:"K49", type:"知识点", name:"检验功效", assumption:"效应与样本量决定检出能力", adv:"优势：规划样本量；劣势：效应大小需预估", scenario:"样本量规划、检验力分析"},
+  {id:"K50", type:"知识点", name:"P值", assumption:"零假设为真时出现当前证据的概率", adv:"优势：标准化证据度量；劣势：易被误读、受样本量影响", scenario:"显著性判断"},
+  {id:"K51", type:"知识点", name:"显著性水平", assumption:"预先设定错误拒绝容忍度", adv:"优势：客观决策阈值；劣势：阈值选择有任意性", scenario:"假设检验决策"},
+  {id:"K52", type:"知识点", name:"拒绝域", assumption:"检验统计量分布已知", adv:"优势：明确拒绝/不拒绝规则；劣势：构造依赖分布假设", scenario:"检验统计量临界值判断"},
+  {id:"K53", type:"知识点", name:"自变量与因变量", assumption:"因果关系方向明确", adv:"优势：构建预测/解释框架；劣势：相关不必然因果", scenario:"回归建模变量设定"},
+  {id:"K54", type:"知识点", name:"残差", assumption:"模型未解释部分为随机噪声", adv:"优势：诊断模型假设；劣势：残差解读有主观性", scenario:"回归诊断"},
+  {id:"K55", type:"知识点", name:"线性假设", assumption:"效应可加且成比例", adv:"优势：参数可解释；劣势：真实关系常非线性", scenario:"回归适用性判断"},
+  {id:"K56", type:"知识点", name:"可决系数R²", assumption:"方差可分解为解释与残差", adv:"优势：度量解释比例；劣势：增加变量虚高", scenario:"回归解释力评估"},
+  {id:"K57", type:"知识点", name:"调整R²", assumption:"惩罚额外参数", adv:"优势：比较不同变量数模型；劣势：惩罚力度有限", scenario:"多元回归模型比较"},
+  {id:"K58", type:"知识点", name:"残差齐性", assumption:"误差方差恒定", adv:"优势：检验回归关键假设；劣势：方差随水平变化时失效", scenario:"加权回归前诊断"},
+  {id:"K59", type:"知识点", name:"残差独立性", assumption:"误差彼此无关", adv:"优势：保证标准误有效；劣势：时序数据常违背", scenario:"时序回归诊断"},
+  {id:"K60", type:"知识点", name:"趋势项与季节项", assumption:"序列可分解为确定性成分", adv:"优势：识别长期与周期规律；劣势：分解方法选择有影响", scenario:"时序分解、季节性预测"},
+  {id:"K61", type:"知识点", name:"平稳序列", assumption:"统计性质不随时间变化", adv:"优势：建模基础稳定；劣势：现实序列常非平稳", scenario:"ARMA/ARIMA建模前提"},
+  {id:"K62", type:"知识点", name:"自相关ACF/PACF", assumption:"过去与未来存在相关结构", adv:"优势：识别滞后依赖；劣势：样本量小不稳定", scenario:"ARMA定阶"},
+  {id:"K63", type:"知识点", name:"协方差矩阵与特征值", assumption:"变量线性结构可对角化", adv:"优势：刻画联合分布与方差结构；劣势：受量纲影响", scenario:"PCA、判别分析基础"},
+  {id:"K64", type:"知识点", name:"马氏距离", assumption:"变量相关结构已知", adv:"优势：考虑协方差、抗量纲；劣势：协方差估计不稳时失真", scenario:"聚类与异常检测距离度量"},
+
+  {id:"M01", type:"模型方法", name:"矩估计", assumption:"样本矩收敛于总体矩；样本独立同分布", adv:"优势：计算简单直观；劣势：不一定满足无偏性", scenario:"总体矩形式已知的简单参数估算"},
+  {id:"M02", type:"模型方法", name:"极大似然估计MLE", assumption:"总体分布形式已知，样本独立", adv:"优势：大样本渐进最优有效；劣势：分布设定错误估计失效", scenario:"已知分布类型的参数估计"},
+  {id:"M03", type:"模型方法", name:"总体均值Z区间估计", assumption:"总体方差已知，正态或大样本", adv:"优势：计算简便；劣势：方差未知小样本不准", scenario:"大样本总体均值置信区间"},
+  {id:"M04", type:"模型方法", name:"总体均值t区间估计", assumption:"总体正态、方差未知", adv:"优势：适配小样本；劣势：非正态小样本偏差", scenario:"小样本均值估计"},
+  {id:"M05", type:"模型方法", name:"总体比例区间估计", assumption:"大样本np、n(1-p)均≥5", adv:"优势：分类指标置信区间；劣势：小样本正态近似失效", scenario:"转化率、不良率区间估算"},
+  {id:"M06", type:"模型方法", name:"两总体均值差区间估计", assumption:"样本独立、正态或大样本", adv:"优势：量化两组差异范围；劣势：方差不齐需校正", scenario:"两组管理指标差异区间评估"},
+  {id:"M07", type:"模型方法", name:"单样本Z检验", assumption:"总体方差已知、正态或大样本", adv:"优势：流程简洁；劣势：方差已知假设苛刻", scenario:"大样本均值与标准比较"},
+  {id:"M08", type:"模型方法", name:"单样本t检验", assumption:"总体正态、方差未知", adv:"优势：适配未知方差小样本；劣势：非正态时偏差", scenario:"样本均值与目标值比较"},
+  {id:"M09", type:"模型方法", name:"独立两样本t检验", assumption:"两样本独立、正态、方差齐性", adv:"优势：对比两组均值；劣势：方差不齐需Welch校正", scenario:"新旧方案组间均值对比"},
+  {id:"M10", type:"模型方法", name:"配对t检验", assumption:"配对观测差服从正态", adv:"优势：消除个体差异、功效高；劣势：配对必须合理", scenario:"前后测、同对象对比"},
+  {id:"M11", type:"模型方法", name:"单因素方差分析ANOVA", assumption:"各组独立、正态、方差齐性", adv:"优势：多组比较控制一类错误；劣势：方差不齐、非正态不可靠", scenario:"多区域/多版本均值对比"},
+  {id:"M12", type:"模型方法", name:"双因素方差分析", assumption:"两因素独立作用或交互、正态方差齐", adv:"优势：考察主效应与交互；劣势：样本要求高", scenario:"营销组合双因素实验"},
+  {id:"M13", type:"模型方法", name:"重复测量方差分析", assumption:"个体内相关结构已知", adv:"优势：利用纵向信息；劣势：违逆球对称假设需校正", scenario:"同一对象多时点测量"},
+  {id:"M14", type:"模型方法", name:"卡方拟合优度检验", assumption:"理论频数已知、样本独立", adv:"优势：检验是否符合理论分布；劣势：频数过小检验力不足", scenario:"分布拟合检验"},
+  {id:"M15", type:"模型方法", name:"卡方独立性检验", assumption:"单元格期望频数充足、样本独立", adv:"优势：检验分类变量独立；劣势：小样本失效", scenario:"分类变量关联检验"},
+  {id:"M16", type:"模型方法", name:"卡方同质性检验", assumption:"多总体同分布假设", adv:"优势：比较多组分布；劣势：与独立性检验易混淆", scenario:"多组比例结构对比"},
+  {id:"M17", type:"模型方法", name:"F方差齐性检验", assumption:"两样本独立正态", adv:"优势：检验方差相等假设；劣势：对正态敏感", scenario:"ANOVA/t检验前置检验"},
+  {id:"M18", type:"模型方法", name:"Mann-Whitney U检验", assumption:"两组独立、分布连续形状相似", adv:"优势：不要求正态；劣势：效能低于参数检验", scenario:"非正态两组中位数比较"},
+  {id:"M19", type:"模型方法", name:"Kruskal-Wallis检验", assumption:"多组独立、分布连续", adv:"优势：ANOVA的非参数替代；劣势：只比较位置", scenario:"多组非正态比较"},
+  {id:"M20", type:"模型方法", name:"Wilcoxon符号秩检验", assumption:"配对差对称、连续", adv:"优势：配对t的非参数替代；劣势：分布对称假设", scenario:"配对非正态比较"},
+  {id:"M21", type:"模型方法", name:"简单线性回归SLR", assumption:"线性、误差独立正态齐性", adv:"优势：直观可解释；劣势：仅单一自变量", scenario:"单变量定量预测"},
+  {id:"M22", type:"模型方法", name:"多元线性回归MLR", assumption:"线性、残差独立正态齐性、无完全共线", adv:"优势：多因素量化与预测；劣势：受异常值、共线性干扰", scenario:"多因素对连续指标影响分析"},
+  {id:"M23", type:"模型方法", name:"加权最小二乘WLS", assumption:"误差方差与权重相关已知", adv:"优势：处理异方差；劣势：权重设定困难", scenario:"异方差数据回归"},
+  {id:"M24", type:"模型方法", name:"稳健回归", assumption:"少量离群值污染", adv:"优势：抗异常值；劣势：参数解释稍弱", scenario:"含离群值的管理数据建模"},
+  {id:"M25", type:"模型方法", name:"多项式回归", assumption:"效应随变量非线性", adv:"优势：拟合曲线关系；劣势：高阶项易过拟合", scenario:"非线性趋势建模"},
+  {id:"M26", type:"模型方法", name:"对数线性回归", assumption:"变量关系在对数尺度线性", adv:"优势：解释弹性；劣势：取对数丢失零值", scenario:"弹性需求、增长率模型"},
+  {id:"M27", type:"模型方法", name:"逻辑回归Logit", assumption:"二分类、logit线性、样本独立", adv:"优势：输出概率、解释性好；劣势：线性决策边界", scenario:"违约概率、流失概率预测"},
+  {id:"M28", type:"模型方法", name:"Probit模型", assumption:"误差服从正态、潜变量线性", adv:"优势：理论严谨；劣势：解释不如logit直观", scenario:"二分类微观建模"},
+  {id:"M29", type:"模型方法", name:"泊松回归", assumption:"计数服从泊松、均值与方差相等", adv:"优势：适配计数数据；劣势：过离散时失效", scenario:"事故数、订单数建模"},
+  {id:"M30", type:"模型方法", name:"负二项回归", assumption:"计数过离散", adv:"优势：处理过离散；劣势：参数更多需更大样本", scenario:"方差大于均值的计数数据"},
+  {id:"M31", type:"模型方法", name:"分段回归", assumption:"结构突变点已知", adv:"优势：拟合阶段性变化；劣势：断点选择主观", scenario:"政策断点、阶段转折建模"},
+  {id:"M32", type:"模型方法", name:"工具变量回归IV", assumption:"工具变量与内生变量相关且外生", adv:"优势：缓解内生性；劣势：寻找有效工具变量困难", scenario:"内生解释变量因果推断"},
+  {id:"M33", type:"模型方法", name:"面板固定效应", assumption:"个体异质性不随时间变且可差分消除", adv:"优势：控制不可观测个体固定效应；劣势：无法估计不随时间变变量", scenario:"面板数据因果估计"},
+  {id:"M34", type:"模型方法", name:"面板随机效应", assumption:"个体异质性与解释变量不相关", adv:"优势：效率更高；劣势：相关时估计有偏", scenario:"个体效应随机面板建模"},
+  {id:"M35", type:"模型方法", name:"移动平均MA平滑", assumption:"短期随机波动可平滑", adv:"优势：消除随机扰动；劣势：滞后于真实变化", scenario:"短序列平滑、趋势观察"},
+  {id:"M36", type:"模型方法", name:"一次指数平滑", assumption:"水平稳定、随机波动", adv:"优势：简单自适应；劣势：无趋势能力", scenario:"平稳短期预测"},
+  {id:"M37", type:"模型方法", name:"二次指数平滑", assumption:"线性趋势持续", adv:"优势：捕捉趋势；劣势：季节波动未处理", scenario:"趋势性短期预测"},
+  {id:"M38", type:"模型方法", name:"Holt-Winters季节指数平滑", assumption:"趋势+季节模式稳定、扰动随机", adv:"优势：捕捉季节波动；劣势：长期预测误差快速放大", scenario:"月度销量、季节性订单预测"},
+  {id:"M39", type:"模型方法", name:"AR自回归", assumption:"序列由过去自身值决定", adv:"优势：利用自身滞后信息；劣势：仅线性依赖", scenario:"平稳序列预测"},
+  {id:"M40", type:"模型方法", name:"MA(滑动平均模型)", assumption:"序列由过去误差决定", adv:"优势：捕捉冲击记忆；劣势：参数估计需迭代", scenario:"白噪声残差修正"},
+  {id:"M41", type:"模型方法", name:"ARMA模型", assumption:"平稳序列存在AR与MA结构", adv:"优势：综合自回归与移动平均；劣势：要求平稳", scenario:"平稳时序短期预测"},
+  {id:"M42", type:"模型方法", name:"ARIMA模型", assumption:"差分后平稳", adv:"优势：处理非平稳单位根序列；劣势：差分损失信息", scenario:"非平稳序列预测"},
+  {id:"M43", type:"模型方法", name:"SARIMA季节ARIMA", assumption:"季节性与非季节成分均可建模", adv:"优势：同时处理趋势与季节；劣势：参数阶数选择复杂", scenario:"含季节规律的时序预测"},
+  {id:"M44", type:"模型方法", name:"ADF单位根检验", assumption:"序列平稳性可检验", adv:"优势：判定差分必要性；劣势：小样本功效低", scenario:"ARIMA建模前置检验"},
+  {id:"M45", type:"模型方法", name:"白噪声检验", assumption:"残差为随机噪声", adv:"优势：验证模型充分性；劣势：对非线性模式不敏感", scenario:"时序模型残差诊断"},
+  {id:"M46", type:"模型方法", name:"时序分解(加法/乘法)", assumption:"趋势、季节、循环、噪声可分离", adv:"优势：直观拆解成分；劣势：分解方法选择影响结果", scenario:"趋势与季节规律识别"},
+  {id:"M47", type:"模型方法", name:"主成分分析PCA", assumption:"变量存在线性冗余、方差代表信息", adv:"优势：降维消除共线；劣势：主成分业务解释困难、受量纲影响", scenario:"多指标压缩、共线性治理"},
+  {id:"M48", type:"模型方法", name:"因子分析FA", assumption:"观测指标由潜变量驱动", adv:"优势：提取潜结构；劣势：因子旋转与命名主观", scenario:"量表潜结构探索"},
+  {id:"M49", type:"模型方法", name:"K均值聚类", assumption:"簇内紧凑、簇间分离、簇近球形", adv:"优势：高效可扩展；劣势：需指定K、对异常值敏感", scenario:"客户分群"},
+  {id:"M50", type:"模型方法", name:"层次聚类", assumption:"簇可合并或分裂", adv:"优势：无需预设K、可输出树状图；劣势：样本大时计算昂贵", scenario:"中小样本层次分群"},
+  {id:"M51", type:"模型方法", name:"DBSCAN密度聚类", assumption:"簇由高密度区域构成、噪声稀疏", adv:"优势：抗噪声、任意形状；劣势：密度参数敏感", scenario:"异常点与任意形状簇"},
+  {id:"M52", type:"模型方法", name:"线性判别分析LDA", assumption:"各类同协方差、正态", adv:"优势：线性可分时稳健；劣势：协方差不同时退化", scenario:"判别分类、降维"},
+  {id:"M53", type:"模型方法", name:"二次判别分析QDA", assumption:"各类协方差可不同、正态", adv:"优势：适配异方差类；劣势：参数多需大样本", scenario:"异协方差判别分类"},
+  {id:"M54", type:"模型方法", name:"典型相关分析CCA", assumption:"两组变量线性相关结构", adv:"优势：度量两组变量关联；劣势：结果解释复杂", scenario:"两组指标间关联分析"},
+  {id:"M55", type:"模型方法", name:"多维标度MDS", assumption:"距离可近似低维嵌入", adv:"优势：可视化相似结构；劣势：距离度量选择影响结果", scenario:"品牌/产品感知图"},
+  {id:"M56", type:"模型方法", name:"对应分析", assumption:"列联表可低维分解", adv:"优势：可视化分类变量关联；劣势：解释需经验", scenario:"市场细分、品牌联分析"},
+  {id:"M57", type:"模型方法", name:"轮廓系数", assumption:"簇内紧密、簇间分离可量化", adv:"优势：评估聚类质量、辅助选K；劣势：形状复杂簇不佳", scenario:"K均值K值选择"},
+  {id:"M58", type:"模型方法", name:"卡方距离", assumption:"列联表相对频数差异", adv:"优势：适配分类变量距离；劣势：零频数处理麻烦", scenario:"对应分析、分类聚类距离"},
+  {id:"M59", type:"模型方法", name:"简单随机抽样", assumption:"总体单元等概率入选", adv:"优势：无偏估计；劣势：样本分散、成本高", scenario:"总体同质时抽样"},
+  {id:"M60", type:"模型方法", name:"分层抽样", assumption:"层内同质、层间异质", adv:"优势：提高精度、保证层代表；劣势：分层依据需合理", scenario:"总体分层明显时抽样"},
+  {id:"M61", type:"模型方法", name:"整群抽样", assumption:"群内异质、群间相似", adv:"优势：节省成本；劣势：精度较低", scenario:"地理群组调研"},
+  {id:"M62", type:"模型方法", name:"系统抽样", assumption:"总体单元有序且无周期", adv:"优势：操作简单；劣势：存在周期时偏差", scenario:"顺序列表抽样"},
+  {id:"M63", type:"模型方法", name:"完全随机设计CRD", assumption:"处理随机分配、干扰均衡", adv:"优势：简单、统计有效；劣势：未控制区组差异", scenario:"均质单元实验"},
+  {id:"M64", type:"模型方法", name:"随机区组设计RBD", assumption:"区组内同质、区组间异质", adv:"优势：控制已知变异、提升精度；劣势：需事先划分区组", scenario:"多区组受试者实验"},
+  {id:"M65", type:"模型方法", name:"析因实验", assumption:"因素效应可加或交互", adv:"优势：考察主效应与交互；劣势：组合数多、成本高", scenario:"多因素同时研究"},
+  {id:"M66", type:"模型方法", name:"拉丁方设计", assumption:"行与列两个干扰因素可控制", adv:"优势：用较少实验控制两干扰；劣势：要求无高阶交互", scenario:"两干扰源受控实验"},
+  {id:"M67", type:"模型方法", name:"均值控制图Xbar", assumption:"过程稳定、波动为随机噪声", adv:"优势：监控过程水平偏移；劣势：微小持续偏移难识别", scenario:"生产均值监控"},
+  {id:"M68", type:"模型方法", name:"极差控制图R", assumption:"过程离散度稳定", adv:"优势：监控波动异常；劣势：样本量小时灵敏度低", scenario:"过程离散监控"},
+  {id:"M69", type:"模型方法", name:"p不合格品率图", assumption:"不合格率稳定、样本足够", adv:"优势：监控质量比例；劣势：样本量变化时控制限波动", scenario:"质量比例监控"},
+  {id:"M70", type:"模型方法", name:"c缺陷数控制图", assumption:"单位缺陷率稳定", adv:"优势：监控计数缺陷；劣势：要求缺陷独立", scenario:"缺陷数监控"},
+  {id:"M71", type:"模型方法", name:"抽样验收方案", assumption:"抽样可代表批次", adv:"优势：平衡检验成本与风险；劣势：存在错判风险", scenario:"批次质量验收"},
+  {id:"M72", type:"模型方法", name:"生存分析Kaplan-Meier", assumption:"删失独立于生存时间", adv:"优势：处理删失数据；劣势：只描述不解释", scenario:"客户流失、设备寿命分析"},
+
+  {id:"A01", type:"智能算法", name:"逐步回归", assumption:"模型稀疏、重要变量少数、误差独立", adv:"优势：自动筛选变量；劣势：易过拟合、P值失真", scenario:"高维候选自变量筛选显著影响因素"},
+  {id:"A02", type:"智能算法", name:"L1 Lasso正则回归", assumption:"参数稀疏、不重要系数压缩到0", adv:"优势：解决共线、自动选变量；劣势：相关变量随机挑其一", scenario:"指标多样本中的影响因素建模"},
+  {id:"A03", type:"智能算法", name:"L2 Ridge岭回归", assumption:"真实参数不大", adv:"优势：抑制共线性系数爆炸；劣势：不能做变量筛选", scenario:"自变量高度相关的多元预测"},
+  {id:"A04", type:"智能算法", name:"ElasticNet弹性网", assumption:"稀疏且共线并存", adv:"优势：兼顾L1稀疏与L2稳定；劣势：需调两超参", scenario:"高维共线数据建模"},
+  {id:"A05", type:"智能算法", name:"贝叶斯估计MCMC", assumption:"后验可由先验与似然采样", adv:"优势：处理不确定性、先验融合；劣势：计算昂贵、收敛诊断难", scenario:"小样本贝叶斯推断"},
+  {id:"A06", type:"智能算法", name:"朴素贝叶斯分类", assumption:"特征条件独立", adv:"优势：简单高效、小样本稳健；劣势：独立性假设常违背", scenario:"文本分类、客户行为分类"},
+  {id:"A07", type:"智能算法", name:"决策树", assumption:"特征可分、规则可递归划分", adv:"优势：可解释、无分布假设；劣势：易过拟合、不稳定", scenario:"规则型分类与筛选"},
+  {id:"A08", type:"智能算法", name:"随机森林", assumption:"多棵树集成、特征随机", adv:"优势：抗过拟合、稳健；劣势：解释性弱、样本小效果差", scenario:"稳健分类/回归、变量重要性"},
+  {id:"A09", type:"智能算法", name:"XGBoost梯度提升", assumption:"残差可迭代学习", adv:"优势：精度高、处理缺失；劣势：调参多、过拟合风险", scenario:"结构化数据预测竞赛"},
+  {id:"A10", type:"智能算法", name:"K近邻KNN", assumption:"相似样本标签相近", adv:"优势：简单无参数；劣势：维度灾难、计算慢", scenario:"小样本分类"},
+  {id:"A11", type:"智能算法", name:"支持向量机SVM", assumption:"高维可分或核映射可分", adv:"优势：小样本高维稳健；劣势：参数与核选择敏感", scenario:"中小样本分类"},
+  {id:"A12", type:"智能算法", name:"EM算法", assumption:"潜变量模型可迭代优化", adv:"优势：处理潜变量与缺失；劣势：局部最优、收敛慢", scenario:"混合模型、缺失数据估计"},
+  {id:"A13", type:"智能算法", name:"遗传算法", assumption:"适应度可量化、解空间可编码", adv:"优势：全局搜索、无梯度要求；劣势：参数多、收敛慢", scenario:"参数寻优、组合优化"},
+  {id:"A14", type:"智能算法", name:"粒子群优化", assumption:"解空间有向、群体协作搜索", adv:"优势：收敛快、实现简单；劣势：易早熟局部最优", scenario:"连续参数寻优"},
+  {id:"A15", type:"智能算法", name:"Bagging自助聚合", assumption:"多模型可并行、方差主导", adv:"优势：降方差、抗过拟合；劣势：偏差不降", scenario:"随机森林基础、不稳定模型集成"},
+  {id:"A16", type:"智能算法", name:"Boosting加法提升", assumption:"残差可序贯拟合", adv:"优势：降偏差、精度高；劣势：易过拟合、串行慢", scenario:"梯度提升、强分类器构建"},
+  {id:"A17", type:"智能算法", name:"轮廓系数自动寻K", assumption:"聚类质量可由轮廓量化", adv:"优势：自动确定聚类数；劣势：复杂形状簇不适用", scenario:"K均值最优K选择"},
+  {id:"A18", type:"智能算法", name:"LSTM时序增强", assumption:"长程依赖可学习", adv:"优势：捕捉长期非线性时序；劣势：黑箱、需大样本", scenario:"复杂时序预测基准"},
+  {id:"A19", type:"智能算法", name:"蒙特卡洛模拟算法", assumption:"输入分布已知且独立", adv:"优势：复杂系统仿真、稳健；劣势：计算量大、依赖分布假设", scenario:"项目风险、投资组合模拟"},
+  {id:"A20", type:"智能算法", name:"马尔可夫链", assumption:"下一状态只依赖当前状态", adv:"优势：建模序列转移；劣势：无记忆假设苛刻", scenario:"客户状态转移、库存流转"},
+  {id:"A21", type:"智能算法", name:"稳健协方差估计", assumption:"离群值污染协方差", adv:"优势：抗异常值；劣势：估计复杂", scenario:"马氏距离、PCA前预处理"},
+  {id:"A22", type:"智能算法", name:"Box-Cox变换", assumption:"幂变换可正态化", adv:"优势：自动寻最优λ；劣势：数据须为正", scenario:"偏态数据正态化"},
+  {id:"A23", type:"智能算法", name:"Yeo-Johnson变换", assumption:"数据含非正亦可变换", adv:"优势：支持零/负值；劣势：解释性弱", scenario:"含非正数的偏态变换"},
+  {id:"A24", type:"智能算法", name:"网格搜索超参优化", assumption:"超参空间可离散枚举", adv:"优势：简单全面；劣势：组合爆炸、耗时", scenario:"模型超参数寻优"},
+  {id:"A25", type:"智能算法", name:"k折交叉验证", assumption:"样本独立、训练测试分布一致", adv:"优势：稳健评估泛化、防过拟合；劣势：分布偏移时评估虚高", scenario:"模型性能评估与选型"},
+  {id:"A26", type:"智能算法", name:"留一法LOOCV", assumption:"每样本独立验证", adv:"优势：充分利用数据；劣势：计算量大", scenario:"小样本模型评估"},
+  {id:"A27", type:"智能算法", name:"多重插补MICE", assumption:"缺失机制可处理、链式迭代", adv:"优势：保留不确定性、多模型稳健；劣势：需大计算", scenario:"缺失数据稳健填充"},
+  {id:"A28", type:"智能算法", name:"倾向得分匹配PSM", assumption:"可观测协变量可平衡", adv:"优势：缓解选择偏差；劣势：仅平衡可观测变量", scenario:"观察性因果推断"},
+  {id:"A29", type:"智能算法", name:"双重差分DID", assumption:"处理组对照组平行趋势", adv:"优势：消除固定效应偏差；劣势：平行趋势假设强", scenario:"政策/举措因果评估"},
+  {id:"A30", type:"智能算法", name:"因果森林", assumption:"异质处理效应可分", adv:"优势：估计个体化效应；劣势：数据要求高", scenario:"个体化干预效果估计"},
+
+  {id:"D01", type:"决策", name:"总体参数推断决策", assumption:"样本能代表目标总体", adv:"优势：量化总体特征；劣势：抽样偏差导致决策错误", scenario:"市场规模估算、客户总体特征判断"},
+  {id:"D02", type:"决策", name:"方案对比择优决策", assumption:"两组对比仅干预变量不同", adv:"优势：基于统计证据选优；劣势：混淆变量干扰因果", scenario:"新旧营销方案、两套工艺选择"},
+  {id:"D03", type:"决策", name:"预测预警决策", assumption:"历史规律短期持续", adv:"优势：提前预判业务指标；劣势：黑天鹅事件失效", scenario:"销量预测、库存预警、风险预警"},
+  {id:"D04", type:"决策", name:"客户分群运营决策", assumption:"群体内部行为同质", adv:"优势：差异化资源投放；劣势：分群过度碎片化、成本上升", scenario:"客户分层运营、精准营销"},
+  {id:"D05", type:"决策", name:"指标筛选决策", assumption:"筛选指标稳定、业务可解释", adv:"优势：精简指标体系；劣势：丢失弱信号指标", scenario:"绩效考核指标、风控指标构建"},
+  {id:"D06", type:"决策", name:"质量管控决策", assumption:"过程波动分随机/特殊原因", adv:"优势：及时触发异常干预；劣势：频繁误报警增加成本", scenario:"生产线、服务流程质量监控"},
+  {id:"D07", type:"决策", name:"样本量规划决策", assumption:"预先确定精度与置信度", adv:"优势：控制调研成本；劣势：总体方差预估错误精度不足", scenario:"市场调研、A/B测试样本规划"},
+  {id:"D08", type:"决策", name:"A/B测试决策", assumption:"分组随机、无混淆变量", adv:"优势：隔离干预效应；劣势：流量污染、样本泄露带来偏差", scenario:"网页改版、营销活动A/B测试"},
+  {id:"D09", type:"决策", name:"风险概率评估决策", assumption:"风险事件概率稳定", adv:"优势：量化风险大小；劣势：尾部小概率事件低估", scenario:"信贷违约、项目投资风险评估"},
+  {id:"D10", type:"决策", name:"资源分配决策", assumption:"投入产出关系稳定可量化", adv:"优势：按统计产出优化资源；劣势：模型静态、难捕捉动态", scenario:"广告预算分配、人力排班优化"},
+  {id:"D11", type:"决策", name:"缺失数据治理决策", assumption:"缺失机制识别正确", adv:"优势：保留样本信息；劣势：错误填充引入虚假信号", scenario:"调研数据、业务数据库缺失处理"},
+  {id:"D12", type:"决策", name:"问卷量表优化决策", assumption:"潜变量可通过观测指标测量", adv:"优势：精简问卷提升可靠性；劣势：信效度达标不等于理论成立", scenario:"满意度、品牌调研量表修订"},
+  {id:"D13", type:"决策", name:"因果干预决策", assumption:"满足因果识别假设", adv:"优势：判断政策/举措真实效应；劣势：未观测混淆变量造成虚假效应", scenario:"员工培训、补贴政策效果评估"},
+  {id:"D14", type:"决策", name:"供应商分级决策", assumption:"供应商指标可稳定区分优劣", adv:"优势：分级管理差异化采购；劣势：指标权重主观", scenario:"供应商评估分级"},
+  {id:"D15", type:"决策", name:"项目风险模拟决策", assumption:"输入变量分布估计合理", adv:"优势：多情景评估收益分布；劣势：输入分布假设错误失真", scenario:"投资项目蒙特卡洛风险分析"},
+  {id:"D16", type:"决策", name:"多目标权衡决策", assumption:"效用函数可刻画决策者偏好", adv:"优势：量化多目标期望效用；劣势：偏好随场景变化", scenario:"成本、质量、交付多目标决策"},
+  {id:"D17", type:"决策", name:"模型落地优先级决策", assumption:"模型收益大于落地成本", adv:"优势：优先落地高价值模型；劣势：忽略非量化隐性收益", scenario:"统计分析项目排期"},
+  {id:"D18", type:"决策", name:"结果汇报决策", assumption:"统计结论可被业务管理者理解", adv:"优势：转化统计为业务语言；劣势：简化丢失不确定性", scenario:"管理层统计报告输出"},
+
+  {id:"R01", type:"审视", name:"模型假设检验", assumption:"模型假设可被数据检验", adv:"优势：识别模型不适用；劣势：检验受样本量影响大", scenario:"回归、方差分析模型诊断"},
+  {id:"R02", type:"审视", name:"异常值/强影响点诊断", assumption:"异常点少数且可识别", adv:"优势：找到扭曲模型的观测；劣势：误删真实极端业务事件", scenario:"回归、多元统计模型检查"},
+  {id:"R03", type:"审视", name:"多重共线性诊断VIF", assumption:"共线性表现为自变量相关", adv:"优势：识别变量冗余；劣势：只识别线性共线", scenario:"多元回归前检查"},
+  {id:"R04", type:"审视", name:"残差分析", assumption:"残差包含模型全部未解释噪声", adv:"优势：检验模型基础假设；劣势：残差图解读主观", scenario:"线性模型诊断"},
+  {id:"R05", type:"审视", name:"多重检验校正", assumption:"多次检验相互独立", adv:"优势：降低假阳性；劣势：校正过严降低检验力", scenario:"多指标显著性检验"},
+  {id:"R06", type:"审视", name:"交叉验证评估", assumption:"样本独立、训练测试分布一致", adv:"优势：评估泛化防过拟合；劣势：分布偏移时评估虚高", scenario:"预测模型性能评估"},
+  {id:"R07", type:"审视", name:"稳健性检验", assumption:"小改动模型设定结论稳定", adv:"优势：验证结论不依赖单一参数；劣势：无法覆盖全部设定", scenario:"实证管理统计结论校验"},
+  {id:"R08", type:"审视", name:"抽样偏差审视", assumption:"抽样框架缺陷可识别", adv:"优势：评估样本代表性；劣势：无外部基准难判断", scenario:"调研样本质量评估"},
+  {id:"R09", type:"审视", name:"非抽样误差审视", assumption:"非抽样误差可通过回访识别", adv:"优势：发现问卷/采集系统偏差；劣势：成本高、难完全消除", scenario:"调研数据质量审核"},
+  {id:"R10", type:"审视", name:"因果混淆变量审视", assumption:"潜在混淆变量可枚举", adv:"优势：排查虚假相关；劣势：不可观测混淆无法检验", scenario:"因果推断研究"},
+  {id:"R11", type:"审视", name:"模型过拟合诊断", assumption:"训练集性能远优于测试集", adv:"优势：识别模型记住噪声；劣势：需预留测试样本", scenario:"预测、分类模型校验"},
+  {id:"R12", type:"审视", name:"欠拟合诊断", assumption:"训练集误差本身很高", adv:"优势：识别模型能力不足；劣势：难区分数据或模型问题", scenario:"简单模型效果评估"},
+  {id:"R13", type:"审视", name:"分布偏移审视", assumption:"建模与未来应用分布一致", adv:"优势：判断模型是否可继续使用；劣势：需新样本监控", scenario:"上线模型持续监控"},
+  {id:"R14", type:"审视", name:"P值滥用审视", assumption:"显著性不等于业务意义", adv:"优势：区分统计显著与管理显著；劣势：依赖业务专家判断", scenario:"假设检验结果解读"},
+  {id:"R15", type:"审视", name:"效应量评估", assumption:"效应量衡量实际差异大小", adv:"优势：弥补P值仅看显著性；劣势：不同方法效应量不可直接对比", scenario:"实验、方差分析结果解读"},
+  {id:"R16", type:"审视", name:"置信区间解读审视", assumption:"置信区间是对总体参数的区间估计", adv:"优势：量化不确定性；劣势：易误解为参数落区间概率", scenario:"参数估计结果汇报审核"},
+  {id:"R17", type:"审视", name:"缺失机制审视", assumption:"缺失模式可通过数据检验", adv:"优势：选择合适缺失处理方法；劣势：MNAR不可检验", scenario:"缺失数据方案审核"},
+  {id:"R18", type:"审视", name:"量纲标准化审视", assumption:"变量尺度处理不引入人为偏差", adv:"优势：检查标准化合理性；劣势：标准化丢失原始业务含义", scenario:"多元降维、聚类前校验"},
+  {id:"R19", type:"审视", name:"离群点处理伦理审视", assumption:"不能随意删除真实业务极端数据", adv:"优势：防止人为篡改结论；劣势：增加分析复杂度", scenario:"异常订单、极端财务数据处理审核"},
+  {id:"R20", type:"审视", name:"模型外推边界审视", assumption:"模型仅在样本变量范围内有效", adv:"优势：禁止无依据外推；劣势：边界判断主观", scenario:"预测模型应用范围评估"},
+  {id:"R21", type:"审视", name:"统计伦理审视", assumption:"数据采集合规、不选择性报告结果", adv:"优势：防止P-hacking与选择性展示；劣势：依赖研究者自律", scenario:"统计项目全流程审计"},
+  {id:"R22", type:"审视", name:"控制图模式识别", assumption:"特殊波动模式可识别", adv:"优势：区分随机波动与系统性偏移；劣势：微小漂移难识别", scenario:"SPC过程监控校验"},
+  {id:"R23", type:"审视", name:"拟合优度审视", assumption:"模型可捕捉数据核心模式", adv:"优势：评估解释能力；劣势：高拟合不等于预测好", scenario:"时序、分布拟合模型评估"},
+  {id:"R24", type:"审视", name:"聚类有效性审视", assumption:"簇内相似度高于簇间", adv:"优势：评估聚类质量；劣势：无唯一最优指标", scenario:"客户聚类结果校验"},
+  {id:"R25", type:"审视", name:"分类混淆矩阵审视", assumption:"不同类别误判成本可区分", adv:"优势：评估各类错判；劣势：样本不平衡扭曲准确率", scenario:"风控、质量分类模型评估"},
+  {id:"R26", type:"审视", name:"倾向得分平衡检验", assumption:"匹配后协变量在组间平衡", adv:"优势：验证因果匹配效果；劣势：只能观测可观测变量", scenario:"PSM因果模型校验"},
+  {id:"R27", type:"审视", name:"DID平行趋势检验", assumption:"处理组对照组处理前趋势平行", adv:"优势：验证双重差分核心假设；劣势：依赖前期数据", scenario:"政策评估DID模型校验"},
+  {id:"R28", type:"审视", name:"自助法标准误审视", assumption:"样本独立、可重复抽样", adv:"优势：估计复杂模型标准误；劣势：样本小结果不稳", scenario:"复杂统计量不确定性估计"},
+  {id:"R29", type:"审视", name:"共线性处理方案审视", assumption:"共线性处理不扭曲真实变量关系", adv:"优势：评估解决方案合理性；劣势：无完美方案", scenario:"高共线性回归模型审核"},
+  {id:"R30", type:"审视", name:"实验随机化校验", assumption:"随机分配执行无误", adv:"优势：确认实验内部有效性；劣势：随机化瑕疵难追溯", scenario:"A/B测试、管理实验审核"},
+  {id:"R31", type:"审视", name:"样本代表性审视", assumption:"样本覆盖目标总体关键分层", adv:"优势：评估结论推广范围；劣势：总体边界模糊难评估", scenario:"调研结论推广性审核"},
+  {id:"R32", type:"审视", name:"不确定性传达审视", assumption:"决策层知晓模型误差范围", adv:"优势：避免把预测当确定事实；劣势：管理者偏好确定性结论", scenario:"统计报告、决策材料审核"}
+];
+
+// ==================== 关系数据（内嵌，来自 edges.csv） ====================
+var EDGES = [
+  {source:"P01", target:"K01", relation:"需要用到"},
+  {source:"P01", target:"K05", relation:"需要用到"},
+  {source:"P01", target:"K26", relation:"需要用到"},
+  {source:"P01", target:"K30", relation:"需要用到"},
+  {source:"P01", target:"K31", relation:"需要用到"},
+  {source:"P01", target:"K37", relation:"需要用到"},
+  {source:"P01", target:"K38", relation:"需要用到"},
+  {source:"P02", target:"K32", relation:"需要用到"},
+  {source:"P02", target:"K24", relation:"需要用到"},
+  {source:"P02", target:"K25", relation:"需要用到"},
+  {source:"P02", target:"K37", relation:"需要用到"},
+  {source:"P02", target:"K38", relation:"需要用到"},
+  {source:"P03", target:"K01", relation:"需要用到"},
+  {source:"P03", target:"K26", relation:"需要用到"},
+  {source:"P03", target:"K30", relation:"需要用到"},
+  {source:"P03", target:"K31", relation:"需要用到"},
+  {source:"P03", target:"K27", relation:"需要用到"},
+  {source:"P04", target:"K32", relation:"需要用到"},
+  {source:"P04", target:"K24", relation:"需要用到"},
+  {source:"P04", target:"K18", relation:"需要用到"},
+  {source:"P05", target:"K01", relation:"需要用到"},
+  {source:"P05", target:"K26", relation:"需要用到"},
+  {source:"P05", target:"K30", relation:"需要用到"},
+  {source:"P05", target:"K28", relation:"需要用到"},
+  {source:"P05", target:"K29", relation:"需要用到"},
+  {source:"P06", target:"K22", relation:"需要用到"},
+  {source:"P06", target:"K23", relation:"需要用到"},
+  {source:"P06", target:"K12", relation:"需要用到"},
+  {source:"P07", target:"K53", relation:"需要用到"},
+  {source:"P07", target:"K54", relation:"需要用到"},
+  {source:"P07", target:"K55", relation:"需要用到"},
+  {source:"P07", target:"K56", relation:"需要用到"},
+  {source:"P08", target:"K63", relation:"需要用到"},
+  {source:"P08", target:"K64", relation:"需要用到"},
+  {source:"P08", target:"K23", relation:"需要用到"},
+  {source:"P09", target:"K60", relation:"需要用到"},
+  {source:"P09", target:"K61", relation:"需要用到"},
+  {source:"P09", target:"K62", relation:"需要用到"},
+  {source:"P09", target:"K25", relation:"需要用到"},
+  {source:"P10", target:"K30", relation:"需要用到"},
+  {source:"P10", target:"K33", relation:"需要用到"},
+  {source:"P10", target:"K22", relation:"需要用到"},
+  {source:"P11", target:"K39", relation:"需要用到"},
+  {source:"P11", target:"K40", relation:"需要用到"},
+  {source:"P11", target:"K30", relation:"需要用到"},
+  {source:"P12", target:"K45", relation:"需要用到"},
+  {source:"P12", target:"K46", relation:"需要用到"},
+  {source:"P12", target:"K47", relation:"需要用到"},
+  {source:"P12", target:"K48", relation:"需要用到"},
+  {source:"P12", target:"K49", relation:"需要用到"},
+  {source:"P12", target:"K50", relation:"需要用到"},
+  {source:"P12", target:"K51", relation:"需要用到"},
+  {source:"P12", target:"K52", relation:"需要用到"},
+  {source:"P13", target:"K56", relation:"需要用到"},
+  {source:"P13", target:"K57", relation:"需要用到"},
+  {source:"P13", target:"K54", relation:"需要用到"},
+  {source:"P14", target:"K63", relation:"需要用到"},
+  {source:"P14", target:"K23", relation:"需要用到"},
+  {source:"P14", target:"K54", relation:"需要用到"},
+  {source:"P15", target:"K08", relation:"需要用到"},
+  {source:"P15", target:"K09", relation:"需要用到"},
+  {source:"P15", target:"K10", relation:"需要用到"},
+  {source:"P15", target:"K64", relation:"需要用到"},
+  {source:"P16", target:"K24", relation:"需要用到"},
+  {source:"P16", target:"K25", relation:"需要用到"},
+  {source:"P16", target:"K26", relation:"需要用到"},
+  {source:"P16", target:"K27", relation:"需要用到"},
+  {source:"P16", target:"K28", relation:"需要用到"},
+  {source:"P16", target:"K29", relation:"需要用到"},
+  {source:"P16", target:"K16", relation:"需要用到"},
+  {source:"P17", target:"K35", relation:"需要用到"},
+  {source:"P17", target:"K27", relation:"需要用到"},
+  {source:"P17", target:"K36", relation:"需要用到"},
+  {source:"P18", target:"K17", relation:"需要用到"},
+  {source:"P18", target:"K34", relation:"需要用到"},
+  {source:"P18", target:"K16", relation:"需要用到"},
+  {source:"P19", target:"K63", relation:"需要用到"},
+  {source:"P19", target:"K64", relation:"需要用到"},
+  {source:"P19", target:"K23", relation:"需要用到"},
+  {source:"P20", target:"K63", relation:"需要用到"},
+  {source:"P20", target:"K64", relation:"需要用到"},
+  {source:"P20", target:"K23", relation:"需要用到"},
+  {source:"P21", target:"K06", relation:"需要用到"},
+  {source:"P21", target:"K08", relation:"需要用到"},
+  {source:"P21", target:"K09", relation:"需要用到"},
+  {source:"P21", target:"K26", relation:"需要用到"},
+  {source:"P22", target:"K13", relation:"需要用到"},
+  {source:"P22", target:"K28", relation:"需要用到"},
+  {source:"P22", target:"K15", relation:"需要用到"},
+  {source:"P23", target:"K28", relation:"需要用到"},
+  {source:"P23", target:"K25", relation:"需要用到"},
+  {source:"P23", target:"K16", relation:"需要用到"},
+  {source:"P24", target:"K22", relation:"需要用到"},
+  {source:"P24", target:"K17", relation:"需要用到"},
+  {source:"P24", target:"K18", relation:"需要用到"},
+  {source:"P25", target:"K33", relation:"需要用到"},
+  {source:"P25", target:"K19", relation:"需要用到"},
+  {source:"P26", target:"K23", relation:"需要用到"},
+  {source:"P26", target:"K64", relation:"需要用到"},
+  {source:"P26", target:"K01", relation:"需要用到"},
+  {source:"P27", target:"K16", relation:"需要用到"},
+  {source:"P27", target:"K20", relation:"需要用到"},
+  {source:"P27", target:"K21", relation:"需要用到"},
+  {source:"P27", target:"K26", relation:"需要用到"},
+  {source:"P28", target:"K24", relation:"需要用到"},
+  {source:"P28", target:"K25", relation:"需要用到"},
+  {source:"P28", target:"K26", relation:"需要用到"},
+  {source:"P29", target:"K26", relation:"需要用到"},
+  {source:"P29", target:"K27", relation:"需要用到"},
+  {source:"P29", target:"K24", relation:"需要用到"},
+  {source:"P30", target:"K20", relation:"需要用到"},
+  {source:"P30", target:"K17", relation:"需要用到"},
+  {source:"P30", target:"K18", relation:"需要用到"},
+  {source:"P31", target:"K33", relation:"需要用到"},
+  {source:"P31", target:"K39", relation:"需要用到"},
+  {source:"P31", target:"K40", relation:"需要用到"},
+  {source:"P32", target:"K30", relation:"需要用到"},
+  {source:"P32", target:"K33", relation:"需要用到"},
+  {source:"P32", target:"K51", relation:"需要用到"},
+  {source:"K01", target:"M01", relation:"支撑"},
+  {source:"K01", target:"M02", relation:"支撑"},
+  {source:"K01", target:"M03", relation:"支撑"},
+  {source:"K01", target:"M04", relation:"支撑"},
+  {source:"K01", target:"M07", relation:"支撑"},
+  {source:"K01", target:"M08", relation:"支撑"},
+  {source:"K01", target:"M09", relation:"支撑"},
+  {source:"K01", target:"M10", relation:"支撑"},
+  {source:"K01", target:"M11", relation:"支撑"},
+  {source:"K01", target:"M21", relation:"支撑"},
+  {source:"K01", target:"M22", relation:"支撑"},
+  {source:"K05", target:"M17", relation:"支撑"},
+  {source:"K05", target:"M23", relation:"支撑"},
+  {source:"K05", target:"M24", relation:"支撑"},
+  {source:"K05", target:"M67", relation:"支撑"},
+  {source:"K05", target:"M68", relation:"支撑"},
+  {source:"K26", target:"M03", relation:"支撑"},
+  {source:"K26", target:"M07", relation:"支撑"},
+  {source:"K26", target:"M09", relation:"支撑"},
+  {source:"K26", target:"M10", relation:"支撑"},
+  {source:"K26", target:"M11", relation:"支撑"},
+  {source:"K26", target:"M21", relation:"支撑"},
+  {source:"K26", target:"M22", relation:"支撑"},
+  {source:"K26", target:"M44", relation:"支撑"},
+  {source:"K26", target:"M59", relation:"支撑"},
+  {source:"K27", target:"M04", relation:"支撑"},
+  {source:"K27", target:"M08", relation:"支撑"},
+  {source:"K27", target:"M09", relation:"支撑"},
+  {source:"K27", target:"M10", relation:"支撑"},
+  {source:"K27", target:"M18", relation:"支撑"},
+  {source:"K28", target:"M14", relation:"支撑"},
+  {source:"K28", target:"M15", relation:"支撑"},
+  {source:"K28", target:"M16", relation:"支撑"},
+  {source:"K28", target:"M17", relation:"支撑"},
+  {source:"K28", target:"M67", relation:"支撑"},
+  {source:"K28", target:"M68", relation:"支撑"},
+  {source:"K28", target:"M69", relation:"支撑"},
+  {source:"K28", target:"M70", relation:"支撑"},
+  {source:"K29", target:"M11", relation:"支撑"},
+  {source:"K29", target:"M12", relation:"支撑"},
+  {source:"K29", target:"M17", relation:"支撑"},
+  {source:"K30", target:"M03", relation:"支撑"},
+  {source:"K30", target:"M07", relation:"支撑"},
+  {source:"K30", target:"M08", relation:"支撑"},
+  {source:"K30", target:"M59", relation:"支撑"},
+  {source:"K30", target:"M60", relation:"支撑"},
+  {source:"K30", target:"M61", relation:"支撑"},
+  {source:"K30", target:"M62", relation:"支撑"},
+  {source:"K31", target:"M03", relation:"支撑"},
+  {source:"K31", target:"M04", relation:"支撑"},
+  {source:"K31", target:"M07", relation:"支撑"},
+  {source:"K31", target:"M08", relation:"支撑"},
+  {source:"K32", target:"M05", relation:"支撑"},
+  {source:"K32", target:"M69", relation:"支撑"},
+  {source:"K33", target:"M03", relation:"支撑"},
+  {source:"K33", target:"M04", relation:"支撑"},
+  {source:"K33", target:"M05", relation:"支撑"},
+  {source:"K33", target:"M06", relation:"支撑"},
+  {source:"K34", target:"M11", relation:"支撑"},
+  {source:"K34", target:"M12", relation:"支撑"},
+  {source:"K34", target:"M14", relation:"支撑"},
+  {source:"K34", target:"M15", relation:"支撑"},
+  {source:"K34", target:"M19", relation:"支撑"},
+  {source:"K35", target:"M20", relation:"支撑"},
+  {source:"K35", target:"M50", relation:"支撑"},
+  {source:"K36", target:"M18", relation:"支撑"},
+  {source:"K36", target:"M19", relation:"支撑"},
+  {source:"K36", target:"M20", relation:"支撑"},
+  {source:"K37", target:"M01", relation:"支撑"},
+  {source:"K37", target:"M02", relation:"支撑"},
+  {source:"K38", target:"M03", relation:"支撑"},
+  {source:"K38", target:"M04", relation:"支撑"},
+  {source:"K38", target:"M05", relation:"支撑"},
+  {source:"K38", target:"M06", relation:"支撑"},
+  {source:"K39", target:"M03", relation:"支撑"},
+  {source:"K39", target:"M04", relation:"支撑"},
+  {source:"K39", target:"M05", relation:"支撑"},
+  {source:"K40", target:"M03", relation:"支撑"},
+  {source:"K40", target:"M04", relation:"支撑"},
+  {source:"K40", target:"M05", relation:"支撑"},
+  {source:"K41", target:"M01", relation:"支撑"},
+  {source:"K41", target:"M02", relation:"支撑"},
+  {source:"K42", target:"M01", relation:"支撑"},
+  {source:"K42", target:"M02", relation:"支撑"},
+  {source:"K43", target:"M02", relation:"支撑"},
+  {source:"K44", target:"M02", relation:"支撑"},
+  {source:"K45", target:"M07", relation:"支撑"},
+  {source:"K45", target:"M08", relation:"支撑"},
+  {source:"K45", target:"M09", relation:"支撑"},
+  {source:"K45", target:"M10", relation:"支撑"},
+  {source:"K45", target:"M11", relation:"支撑"},
+  {source:"K45", target:"M14", relation:"支撑"},
+  {source:"K45", target:"M15", relation:"支撑"},
+  {source:"K45", target:"M16", relation:"支撑"},
+  {source:"K45", target:"M17", relation:"支撑"},
+  {source:"K46", target:"M07", relation:"支撑"},
+  {source:"K46", target:"M08", relation:"支撑"},
+  {source:"K46", target:"M09", relation:"支撑"},
+  {source:"K47", target:"M07", relation:"支撑"},
+  {source:"K47", target:"M08", relation:"支撑"},
+  {source:"K47", target:"M09", relation:"支撑"},
+  {source:"K47", target:"M11", relation:"支撑"},
+  {source:"K48", target:"M07", relation:"支撑"},
+  {source:"K48", target:"M08", relation:"支撑"},
+  {source:"K48", target:"M11", relation:"支撑"},
+  {source:"K49", target:"M07", relation:"支撑"},
+  {source:"K49", target:"M11", relation:"支撑"},
+  {source:"K50", target:"M07", relation:"支撑"},
+  {source:"K50", target:"M08", relation:"支撑"},
+  {source:"K50", target:"M09", relation:"支撑"},
+  {source:"K50", target:"M10", relation:"支撑"},
+  {source:"K50", target:"M11", relation:"支撑"},
+  {source:"K50", target:"M14", relation:"支撑"},
+  {source:"K51", target:"M07", relation:"支撑"},
+  {source:"K51", target:"M08", relation:"支撑"},
+  {source:"K51", target:"M09", relation:"支撑"},
+  {source:"K51", target:"M14", relation:"支撑"},
+  {source:"K52", target:"M07", relation:"支撑"},
+  {source:"K52", target:"M08", relation:"支撑"},
+  {source:"K52", target:"M09", relation:"支撑"},
+  {source:"K52", target:"M11", relation:"支撑"},
+  {source:"K52", target:"M14", relation:"支撑"},
+  {source:"K53", target:"M21", relation:"支撑"},
+  {source:"K53", target:"M22", relation:"支撑"},
+  {source:"K53", target:"M23", relation:"支撑"},
+  {source:"K53", target:"M24", relation:"支撑"},
+  {source:"K53", target:"M25", relation:"支撑"},
+  {source:"K53", target:"M26", relation:"支撑"},
+  {source:"K53", target:"M27", relation:"支撑"},
+  {source:"K53", target:"M28", relation:"支撑"},
+  {source:"K54", target:"M21", relation:"支撑"},
+  {source:"K54", target:"M22", relation:"支撑"},
+  {source:"K54", target:"M23", relation:"支撑"},
+  {source:"K54", target:"M24", relation:"支撑"},
+  {source:"K55", target:"M21", relation:"支撑"},
+  {source:"K55", target:"M22", relation:"支撑"},
+  {source:"K55", target:"M25", relation:"支撑"},
+  {source:"K55", target:"M31", relation:"支撑"},
+  {source:"K56", target:"M21", relation:"支撑"},
+  {source:"K56", target:"M22", relation:"支撑"},
+  {source:"K56", target:"M47", relation:"支撑"},
+  {source:"K57", target:"M22", relation:"支撑"},
+  {source:"K58", target:"M23", relation:"支撑"},
+  {source:"K58", target:"M24", relation:"支撑"},
+  {source:"K59", target:"M21", relation:"支撑"},
+  {source:"K59", target:"M22", relation:"支撑"},
+  {source:"K59", target:"M39", relation:"支撑"},
+  {source:"K59", target:"M41", relation:"支撑"},
+  {source:"K60", target:"M35", relation:"支撑"},
+  {source:"K60", target:"M36", relation:"支撑"},
+  {source:"K60", target:"M37", relation:"支撑"},
+  {source:"K60", target:"M38", relation:"支撑"},
+  {source:"K60", target:"M46", relation:"支撑"},
+  {source:"K61", target:"M39", relation:"支撑"},
+  {source:"K61", target:"M40", relation:"支撑"},
+  {source:"K61", target:"M41", relation:"支撑"},
+  {source:"K61", target:"M42", relation:"支撑"},
+  {source:"K61", target:"M43", relation:"支撑"},
+  {source:"K61", target:"M45", relation:"支撑"},
+  {source:"K62", target:"M39", relation:"支撑"},
+  {source:"K62", target:"M41", relation:"支撑"},
+  {source:"K62", target:"M42", relation:"支撑"},
+  {source:"K63", target:"M47", relation:"支撑"},
+  {source:"K63", target:"M48", relation:"支撑"},
+  {source:"K63", target:"M52", relation:"支撑"},
+  {source:"K63", target:"M53", relation:"支撑"},
+  {source:"K63", target:"M54", relation:"支撑"},
+  {source:"K63", target:"M55", relation:"支撑"},
+  {source:"K63", target:"M56", relation:"支撑"},
+  {source:"K64", target:"M49", relation:"支撑"},
+  {source:"K64", target:"M50", relation:"支撑"},
+  {source:"K64", target:"M51", relation:"支撑"},
+  {source:"K64", target:"M58", relation:"支撑"},
+  {source:"K64", target:"M57", relation:"支撑"},
+  {source:"M01", target:"A19", relation:"可被优化"},
+  {source:"M02", target:"A05", relation:"可被优化"},
+  {source:"M03", target:"A25", relation:"可被优化"},
+  {source:"M03", target:"A26", relation:"可被优化"},
+  {source:"M04", target:"A25", relation:"可被优化"},
+  {source:"M04", target:"A26", relation:"可被优化"},
+  {source:"M05", target:"A25", relation:"可被优化"},
+  {source:"M05", target:"A26", relation:"可被优化"},
+  {source:"M09", target:"A28", relation:"可被优化"},
+  {source:"M11", target:"A25", relation:"可被优化"},
+  {source:"M11", target:"A26", relation:"可被优化"},
+  {source:"M21", target:"A01", relation:"可被优化"},
+  {source:"M21", target:"A02", relation:"可被优化"},
+  {source:"M21", target:"A03", relation:"可被优化"},
+  {source:"M21", target:"A22", relation:"可被优化"},
+  {source:"M21", target:"A25", relation:"可被优化"},
+  {source:"M22", target:"A01", relation:"可被优化"},
+  {source:"M22", target:"A02", relation:"可被优化"},
+  {source:"M22", target:"A03", relation:"可被优化"},
+  {source:"M22", target:"A04", relation:"可被优化"},
+  {source:"M22", target:"A25", relation:"可被优化"},
+  {source:"M22", target:"A22", relation:"可被优化"},
+  {source:"M25", target:"A22", relation:"可被优化"},
+  {source:"M25", target:"A23", relation:"可被优化"},
+  {source:"M25", target:"A24", relation:"可被优化"},
+  {source:"M27", target:"A06", relation:"可被优化"},
+  {source:"M27", target:"A07", relation:"可被优化"},
+  {source:"M27", target:"A10", relation:"可被优化"},
+  {source:"M27", target:"A25", relation:"可被优化"},
+  {source:"M28", target:"A06", relation:"可被优化"},
+  {source:"M28", target:"A25", relation:"可被优化"},
+  {source:"M29", target:"A09", relation:"可被优化"},
+  {source:"M29", target:"A25", relation:"可被优化"},
+  {source:"M30", target:"A09", relation:"可被优化"},
+  {source:"M32", target:"A28", relation:"可被优化"},
+  {source:"M32", target:"A29", relation:"可被优化"},
+  {source:"M33", target:"A29", relation:"可被优化"},
+  {source:"M33", target:"A30", relation:"可被优化"},
+  {source:"M34", target:"A29", relation:"可被优化"},
+  {source:"M38", target:"A24", relation:"可被优化"},
+  {source:"M38", target:"A25", relation:"可被优化"},
+  {source:"M42", target:"A24", relation:"可被优化"},
+  {source:"M42", target:"A25", relation:"可被优化"},
+  {source:"M43", target:"A24", relation:"可被优化"},
+  {source:"M46", target:"A22", relation:"可被优化"},
+  {source:"M47", target:"A21", relation:"可被优化"},
+  {source:"M47", target:"A22", relation:"可被优化"},
+  {source:"M48", target:"A05", relation:"可被优化"},
+  {source:"M49", target:"A17", relation:"可被优化"},
+  {source:"M49", target:"A13", relation:"可被优化"},
+  {source:"M50", target:"A17", relation:"可被优化"},
+  {source:"M51", target:"A13", relation:"可被优化"},
+  {source:"M51", target:"A14", relation:"可被优化"},
+  {source:"M52", target:"A11", relation:"可被优化"},
+  {source:"M53", target:"A11", relation:"可被优化"},
+  {source:"M54", target:"A21", relation:"可被优化"},
+  {source:"M55", target:"A19", relation:"可被优化"},
+  {source:"M57", target:"A17", relation:"可被优化"},
+  {source:"M59", target:"A13", relation:"可被优化"},
+  {source:"M60", target:"A13", relation:"可被优化"},
+  {source:"M61", target:"A13", relation:"可被优化"},
+  {source:"M62", target:"A13", relation:"可被优化"},
+  {source:"M63", target:"A30", relation:"可被优化"},
+  {source:"M64", target:"A30", relation:"可被优化"},
+  {source:"M65", target:"A30", relation:"可被优化"},
+  {source:"M67", target:"A22", relation:"可被优化"},
+  {source:"M68", target:"A22", relation:"可被优化"},
+  {source:"M69", target:"A22", relation:"可被优化"},
+  {source:"M70", target:"A22", relation:"可被优化"},
+  {source:"M72", target:"A09", relation:"可被优化"},
+  {source:"M72", target:"A07", relation:"可被优化"},
+  {source:"M03", target:"D01", relation:"输出支持"},
+  {source:"M03", target:"D07", relation:"输出支持"},
+  {source:"M04", target:"D01", relation:"输出支持"},
+  {source:"M04", target:"D07", relation:"输出支持"},
+  {source:"M05", target:"D01", relation:"输出支持"},
+  {source:"M05", target:"D07", relation:"输出支持"},
+  {source:"M09", target:"D02", relation:"输出支持"},
+  {source:"M11", target:"D02", relation:"输出支持"},
+  {source:"M12", target:"D02", relation:"输出支持"},
+  {source:"M13", target:"D02", relation:"输出支持"},
+  {source:"M14", target:"D18", relation:"输出支持"},
+  {source:"M15", target:"D18", relation:"输出支持"},
+  {source:"M18", target:"D02", relation:"输出支持"},
+  {source:"M19", target:"D02", relation:"输出支持"},
+  {source:"M22", target:"D03", relation:"输出支持"},
+  {source:"M22", target:"D05", relation:"输出支持"},
+  {source:"M22", target:"D10", relation:"输出支持"},
+  {source:"M27", target:"D09", relation:"输出支持"},
+  {source:"M27", target:"D13", relation:"输出支持"},
+  {source:"M38", target:"D03", relation:"输出支持"},
+  {source:"M42", target:"D03", relation:"输出支持"},
+  {source:"M43", target:"D03", relation:"输出支持"},
+  {source:"M47", target:"D05", relation:"输出支持"},
+  {source:"M47", target:"D16", relation:"输出支持"},
+  {source:"M49", target:"D04", relation:"输出支持"},
+  {source:"M49", target:"D14", relation:"输出支持"},
+  {source:"M50", target:"D04", relation:"输出支持"},
+  {source:"M51", target:"D04", relation:"输出支持"},
+  {source:"M59", target:"D07", relation:"输出支持"},
+  {source:"M60", target:"D07", relation:"输出支持"},
+  {source:"M61", target:"D07", relation:"输出支持"},
+  {source:"M62", target:"D07", relation:"输出支持"},
+  {source:"M63", target:"D02", relation:"输出支持"},
+  {source:"M63", target:"D08", relation:"输出支持"},
+  {source:"M64", target:"D02", relation:"输出支持"},
+  {source:"M64", target:"D08", relation:"输出支持"},
+  {source:"M65", target:"D02", relation:"输出支持"},
+  {source:"M67", target:"D06", relation:"输出支持"},
+  {source:"M68", target:"D06", relation:"输出支持"},
+  {source:"M69", target:"D06", relation:"输出支持"},
+  {source:"M70", target:"D06", relation:"输出支持"},
+  {source:"M71", target:"D14", relation:"输出支持"},
+  {source:"A02", target:"D05", relation:"输出支持"},
+  {source:"A03", target:"D05", relation:"输出支持"},
+  {source:"A09", target:"D03", relation:"输出支持"},
+  {source:"A09", target:"D09", relation:"输出支持"},
+  {source:"A08", target:"D04", relation:"输出支持"},
+  {source:"A08", target:"D09", relation:"输出支持"},
+  {source:"A17", target:"D04", relation:"输出支持"},
+  {source:"A18", target:"D03", relation:"输出支持"},
+  {source:"A19", target:"D15", relation:"输出支持"},
+  {source:"A27", target:"D11", relation:"输出支持"},
+  {source:"A28", target:"D13", relation:"输出支持"},
+  {source:"A29", target:"D13", relation:"输出支持"},
+  {source:"A29", target:"D02", relation:"输出支持"},
+  {source:"A30", target:"D13", relation:"输出支持"},
+  {source:"R01", target:"M21", relation:"校验反馈"},
+  {source:"R01", target:"M22", relation:"校验反馈"},
+  {source:"R01", target:"M11", relation:"校验反馈"},
+  {source:"R01", target:"M09", relation:"校验反馈"},
+  {source:"R01", target:"M12", relation:"校验反馈"},
+  {source:"R02", target:"M21", relation:"校验反馈"},
+  {source:"R02", target:"M22", relation:"校验反馈"},
+  {source:"R02", target:"M47", relation:"校验反馈"},
+  {source:"R02", target:"M49", relation:"校验反馈"},
+  {source:"R02", target:"M52", relation:"校验反馈"},
+  {source:"R03", target:"M22", relation:"校验反馈"},
+  {source:"R03", target:"P14", relation:"校验反馈"},
+  {source:"R04", target:"M21", relation:"校验反馈"},
+  {source:"R04", target:"M22", relation:"校验反馈"},
+  {source:"R04", target:"M11", relation:"校验反馈"},
+  {source:"R04", target:"M09", relation:"校验反馈"},
+  {source:"R05", target:"P12", relation:"校验反馈"},
+  {source:"R05", target:"K50", relation:"校验反馈"},
+  {source:"R06", target:"A25", relation:"校验反馈"},
+  {source:"R06", target:"A26", relation:"校验反馈"},
+  {source:"R06", target:"A08", relation:"校验反馈"},
+  {source:"R06", target:"A09", relation:"校验反馈"},
+  {source:"R06", target:"A11", relation:"校验反馈"},
+  {source:"R07", target:"M22", relation:"校验反馈"},
+  {source:"R07", target:"M32", relation:"校验反馈"},
+  {source:"R07", target:"M33", relation:"校验反馈"},
+  {source:"R07", target:"M34", relation:"校验反馈"},
+  {source:"R08", target:"M59", relation:"校验反馈"},
+  {source:"R08", target:"M60", relation:"校验反馈"},
+  {source:"R08", target:"M61", relation:"校验反馈"},
+  {source:"R08", target:"M62", relation:"校验反馈"},
+  {source:"R08", target:"P10", relation:"校验反馈"},
+  {source:"R08", target:"P31", relation:"校验反馈"},
+  {source:"R09", target:"P10", relation:"校验反馈"},
+  {source:"R09", target:"P31", relation:"校验反馈"},
+  {source:"R09", target:"D07", relation:"校验反馈"},
+  {source:"R10", target:"M32", relation:"校验反馈"},
+  {source:"R10", target:"P24", relation:"校验反馈"},
+  {source:"R10", target:"K18", relation:"校验反馈"},
+  {source:"R11", target:"A25", relation:"校验反馈"},
+  {source:"R11", target:"A26", relation:"校验反馈"},
+  {source:"R11", target:"A08", relation:"校验反馈"},
+  {source:"R11", target:"A09", relation:"校验反馈"},
+  {source:"R12", target:"M21", relation:"校验反馈"},
+  {source:"R12", target:"M22", relation:"校验反馈"},
+  {source:"R12", target:"A07", relation:"校验反馈"},
+  {source:"R13", target:"D03", relation:"校验反馈"},
+  {source:"R13", target:"A18", relation:"校验反馈"},
+  {source:"R13", target:"A09", relation:"校验反馈"},
+  {source:"R14", target:"P12", relation:"校验反馈"},
+  {source:"R14", target:"K50", relation:"校验反馈"},
+  {source:"R14", target:"D18", relation:"校验反馈"},
+  {source:"R15", target:"M11", relation:"校验反馈"},
+  {source:"R15", target:"M09", relation:"校验反馈"},
+  {source:"R15", target:"D18", relation:"校验反馈"},
+  {source:"R16", target:"M03", relation:"校验反馈"},
+  {source:"R16", target:"M04", relation:"校验反馈"},
+  {source:"R16", target:"M05", relation:"校验反馈"},
+  {source:"R16", target:"D18", relation:"校验反馈"},
+  {source:"R17", target:"A27", relation:"校验反馈"},
+  {source:"R17", target:"P25", relation:"校验反馈"},
+  {source:"R17", target:"K33", relation:"校验反馈"},
+  {source:"R18", target:"P26", relation:"校验反馈"},
+  {source:"R18", target:"M47", relation:"校验反馈"},
+  {source:"R18", target:"M49", relation:"校验反馈"},
+  {source:"R19", target:"P15", relation:"校验反馈"},
+  {source:"R19", target:"R02", relation:"校验反馈"},
+  {source:"R20", target:"P32", relation:"校验反馈"},
+  {source:"R20", target:"D03", relation:"校验反馈"},
+  {source:"R21", target:"P12", relation:"校验反馈"},
+  {source:"R21", target:"D18", relation:"校验反馈"},
+  {source:"R21", target:"R14", relation:"校验反馈"},
+  {source:"R22", target:"M67", relation:"校验反馈"},
+  {source:"R22", target:"M68", relation:"校验反馈"},
+  {source:"R22", target:"M69", relation:"校验反馈"},
+  {source:"R22", target:"M70", relation:"校验反馈"},
+  {source:"R22", target:"P21", relation:"校验反馈"},
+  {source:"R23", target:"M14", relation:"校验反馈"},
+  {source:"R23", target:"M46", relation:"校验反馈"},
+  {source:"R23", target:"M42", relation:"校验反馈"},
+  {source:"R24", target:"M49", relation:"校验反馈"},
+  {source:"R24", target:"M50", relation:"校验反馈"},
+  {source:"R24", target:"M51", relation:"校验反馈"},
+  {source:"R24", target:"M57", relation:"校验反馈"},
+  {source:"R25", target:"M27", relation:"校验反馈"},
+  {source:"R25", target:"A08", relation:"校验反馈"},
+  {source:"R25", target:"A09", relation:"校验反馈"},
+  {source:"R25", target:"A10", relation:"校验反馈"},
+  {source:"R25", target:"A11", relation:"校验反馈"},
+  {source:"R26", target:"A28", relation:"校验反馈"},
+  {source:"R26", target:"M32", relation:"校验反馈"},
+  {source:"R27", target:"A29", relation:"校验反馈"},
+  {source:"R27", target:"M33", relation:"校验反馈"},
+  {source:"R28", target:"K36", relation:"校验反馈"},
+  {source:"R28", target:"M02", relation:"校验反馈"},
+  {source:"R28", target:"M22", relation:"校验反馈"},
+  {source:"R29", target:"M22", relation:"校验反馈"},
+  {source:"R29", target:"A02", relation:"校验反馈"},
+  {source:"R29", target:"A03", relation:"校验反馈"},
+  {source:"R29", target:"A04", relation:"校验反馈"},
+  {source:"R30", target:"M63", relation:"校验反馈"},
+  {source:"R30", target:"M64", relation:"校验反馈"},
+  {source:"R30", target:"M65", relation:"校验反馈"},
+  {source:"R30", target:"D08", relation:"校验反馈"},
+  {source:"R31", target:"M59", relation:"校验反馈"},
+  {source:"R31", target:"M60", relation:"校验反馈"},
+  {source:"R31", target:"M61", relation:"校验反馈"},
+  {source:"R31", target:"D18", relation:"校验反馈"},
+  {source:"R32", target:"D18", relation:"校验反馈"},
+  {source:"R32", target:"D03", relation:"校验反馈"},
+  {source:"R32", target:"D09", relation:"校验反馈"}
+];
+
+// ==================== 颜色映射 ====================
+var TYPE_COLORS = {
+  '业务问题': '#e74c3c',
+  '知识点': '#3498db',
+  '模型方法': '#27ae60',
+  '智能算法': '#9b59b6',
+  '决策': '#f39c12',
+  '审视': '#95a5a6'
+};
+
+var RELATION_COLORS = {
+  '需要用到': '#e74c3c',
+  '支撑': '#3498db',
+  '可被优化': '#27ae60',
+  '输出支持': '#f39c12',
+  '校验反馈': '#95a5a6'
+};
+
+// ==================== 初始化图表 ====================
+var chart = echarts.init(document.getElementById('graph'));
+
+chart.on('click', function(params) {
+  if (params.dataType === 'node') {
+    showNodeDetail(params.data.rawData);
+  }
+});
+
+// ==================== 渲染图谱 ====================
+function renderGraph(filterType) {
+  var filteredNodes = NODES.filter(function(n) {
+    return filterType === 'all' || n.type === filterType;
+  });
+  var nodeIds = filteredNodes.map(function(n) { return n.id; });
+  var filteredEdges = EDGES.filter(function(e) {
+    return nodeIds.indexOf(e.source) !== -1 && nodeIds.indexOf(e.target) !== -1;
+  });
+
+  var categories = Object.keys(TYPE_COLORS).map(function(t) {
+    return { name: t };
+  });
+
+  var nodes = filteredNodes.map(function(n) {
+    var size = n.type === '业务问题' ? 22 :
+               n.type === '知识点' ? 16 :
+               n.type === '模型方法' ? 14 :
+               n.type === '智能算法' ? 14 :
+               n.type === '决策' ? 18 : 12;
+    return {
+      id: n.id,
+      name: n.name,
+      category: Object.keys(TYPE_COLORS).indexOf(n.type),
+      symbolSize: size,
+      itemStyle: { color: TYPE_COLORS[n.type] },
+      label: { show: true, fontSize: 9, position: 'right' },
+      rawData: n
+    };
+  });
+
+  var links = filteredEdges.map(function(e) {
+    return {
+      source: e.source,
+      target: e.target,
+      lineStyle: {
+        color: RELATION_COLORS[e.relation] || '#ccc',
+        width: 1,
+        curveness: 0.1,
+        opacity: 0.4
+      }
+    };
+  });
+
+  var option = {
+    tooltip: {
+      trigger: 'item',
+      formatter: function(params) {
+        if (params.dataType === 'node') {
+          return '<b>' + params.data.name + '</b><br>' +
+                 '类型：' + Object.keys(TYPE_COLORS)[params.data.category];
+        }
+        return params.data.source + ' → ' + params.data.target;
+      }
+    },
+    legend: {
+      data: Object.keys(TYPE_COLORS),
+      top: 8,
+      left: 'center',
+      textStyle: { fontSize: 11 }
+    },
+    series: [{
+      type: 'graph',
+      layout: 'force',
+      force: {
+        repulsion: 180,
+        edgeLength: [50, 120],
+        gravity: 0.08,
+        friction: 0.1,
+        layoutAnimation: false      },
+      roam: true,
+      draggable: true,
+      data: nodes,
+      links: links,
+      categories: categories,
+      emphasis: {
+        focus: 'adjacency',
+        lineStyle: { width: 3, opacity: 1 }
+      },
+      lineStyle: { opacity: 0.4 },
+      label: { show: true }
+    }]
+  };
+
+  chart.setOption(option, true);
+
+  document.getElementById('stats').textContent =
+    '节点 ' + nodes.length + ' 个 ｜ 关系 ' + links.length + ' 条';
+}
+
+// ==================== 节点详情 ====================
+function showNodeDetail(node) {
+  var panel = document.getElementById('sidePanel');
+  var content = document.getElementById('panelContent');
+  var color = TYPE_COLORS[node.type] || '#3498db';
+
+  var adv = '', dis = '';
+  if (node.adv) {
+    var parts = node.adv.split('劣势：');
+    if (parts.length === 2) {
+      adv = parts[0].replace('优势：', '').trim();
+      dis = parts[1].trim();
+    } else {
+      adv = node.adv;
+    }
+  }
+
+  content.innerHTML =
+    '<span class="node-type" style="background:' + color + '22;color:' + color + ';">' + node.type + '</span>' +
+    '<div class="field"><div class="label">名称</div><div class="value"><b>' + node.name + '</b></div></div>' +
+    (node.scenario ? '<div class="field"><div class="label">典型场景</div><div class="value">' + node.scenario + '</div></div>' : '') +
+    (node.assumption ? '<div class="field"><div class="label">核心假设</div><div class="value">' + node.assumption + '</div></div>' : '') +
+    (adv ? '<div class="field"><div class="label">优势</div><div class="value" style="color:#27ae60;">' + adv + '</div></div>' : '') +
+    (dis ? '<div class="field"><div class="label">劣势</div><div class="value" style="color:#e74c3c;">' + dis + '</div></div>' : '');
+
+  panel.classList.add('show');
+}
+
+// ==================== 事件绑定 ====================
+document.getElementById('closePanel').addEventListener('click', function() {
+  document.getElementById('sidePanel').classList.remove('show');
+});
+
+document.getElementById('typeFilter').addEventListener('change', function() {
+  renderGraph(this.value);
+});
+
+document.getElementById('resetBtn').addEventListener('click', function() {
+  document.getElementById('typeFilter').value = 'all';
+  document.getElementById('searchInput').value = '';
+  renderGraph('all');
+});
+
+document.getElementById('searchBtn').addEventListener('click', function() {
+  var keyword = document.getElementById('searchInput').value.trim();
+  if (!keyword) return;
+  var found = NODES.filter(function(n) {
+    return n.name.indexOf(keyword) !== -1;
+  });
+  if (found.length === 0) {
+    alert('未找到包含“' + keyword + '”的节点');
+    return;
+  }
+  chart.dispatchAction({ type: 'highlight', name: found[0].name });
+  showNodeDetail(found[0]);
+});
+
+// ==================== 启动 ====================
+renderGraph('all');
+window.addEventListener('resize', function() { chart.resize(); });
+</script>
+</body>
+</html>
